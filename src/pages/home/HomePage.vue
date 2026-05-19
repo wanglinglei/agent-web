@@ -21,11 +21,10 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
       <header class="home-hero">
         <div class="home-copy">
           <p class="home-kicker">Agent Web</p>
-          <h1>选择一个子 Agent，直接进入对应业务工作台</h1>
+          <h1>Agent 工作台</h1>
           <p class="home-description">
-            首页只负责分发入口。天气、邮件、边界 SVG
-            三个子 Agent 现在各自独立运行，进入页面后会固定携带对应
-            <code>agentKey</code> 调用后端。
+            选择一个子 Agent 直接进入对应业务页。天气、邮件、边界 SVG
+            现在独立运行，并固定携带对应 <code>agentKey</code> 调用后端。
           </p>
         </div>
 
@@ -129,8 +128,8 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
 
 .home-shell {
   margin: 0 auto;
-  max-width: 1320px;
-  padding: 1.4rem 1rem 2rem;
+  max-width: 1240px;
+  padding: 1.05rem 1rem 1.55rem;
   position: relative;
   z-index: 1;
 }
@@ -139,12 +138,14 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
   background:
     linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92)),
     linear-gradient(120deg, #f59e0b 0%, #2563eb 100%);
-  border-radius: 2.2rem;
+  border-radius: 1.85rem;
   color: white;
   display: grid;
-  gap: 1.5rem;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  padding: 1.8rem;
+  align-items: end;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  min-height: 220px;
+  padding: 1.2rem 1.35rem;
   position: relative;
   box-shadow: 0 32px 80px rgba(15, 23, 42, 0.18);
 }
@@ -165,6 +166,7 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
 }
 
 .home-kicker {
+  font-size: 0.76rem;
   letter-spacing: 0.18em;
   margin: 0;
   opacity: 0.72;
@@ -172,18 +174,18 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
 }
 
 .home-copy h1 {
-  font-size: clamp(2.3rem, 5vw, 4rem);
-  line-height: 1.02;
-  margin: 0.65rem 0 0;
-  max-width: 12ch;
+  font-size: clamp(2.1rem, 3.3vw, 3rem);
+  line-height: 1.08;
+  margin: 0.42rem 0 0;
+  max-width: none;
 }
 
 .home-description {
-  font-size: 1.02rem;
-  line-height: 1.8;
-  margin: 1.1rem 0 0;
-  max-width: 52rem;
-  opacity: 0.9;
+  font-size: 0.9rem;
+  line-height: 1.62;
+  margin: 0.72rem 0 0;
+  max-width: 36rem;
+  opacity: 0.88;
 }
 
 .home-description code {
@@ -196,34 +198,36 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
   align-self: end;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 1.6rem;
-  padding: 1rem 1.1rem;
+  border-radius: 1.3rem;
+  max-width: 260px;
+  padding: 0.8rem 0.9rem;
   backdrop-filter: blur(14px);
 }
 
 .home-panel-label {
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   margin: 0;
   opacity: 0.72;
 }
 
 .home-panel-title {
-  font-size: 1.1rem;
+  font-size: 0.92rem;
   font-weight: 700;
-  margin: 0.5rem 0 0;
+  margin: 0.35rem 0 0;
 }
 
 .home-panel-copy {
-  line-height: 1.7;
-  margin: 0.75rem 0 0;
-  opacity: 0.9;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  margin: 0.5rem 0 0;
+  opacity: 0.86;
 }
 
 .home-grid {
   display: grid;
-  gap: 1.1rem;
+  gap: 0.9rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 1.25rem;
+  margin-top: 0.95rem;
 }
 
 .agent-card {
@@ -231,15 +235,15 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
     linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.82)),
     white;
   border: 1px solid color-mix(in srgb, var(--home-card-accent) 16%, white 84%);
-  border-radius: 1.7rem;
-  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.09);
+  border-radius: 1.4rem;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
   color: #172033;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  min-height: 320px;
+  gap: 0.82rem;
+  min-height: 272px;
   overflow: hidden;
-  padding: 1.2rem;
+  padding: 1rem;
   position: relative;
   text-decoration: none;
   transition:
@@ -251,7 +255,7 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
 .agent-card::before {
   background: var(--home-card-hero);
   content: '';
-  height: 0.45rem;
+  height: 0.35rem;
   inset: 0 0 auto;
   position: absolute;
 }
@@ -266,12 +270,12 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
   align-items: center;
   display: flex;
   justify-content: space-between;
-  margin-top: 0.5rem;
+  margin-top: 0.15rem;
 }
 
 .agent-card-badge {
   color: var(--home-card-accent-strong);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   margin: 0;
@@ -280,37 +284,38 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
 
 .agent-card-arrow {
   background: color-mix(in srgb, var(--home-card-accent-soft) 70%, white 30%);
-  border-radius: 999px;
+  border-radius: 0.9rem;
   color: var(--home-card-accent-strong);
-  font-size: 0.78rem;
-  padding: 0.35rem 0.65rem;
+  font-size: 0.74rem;
+  padding: 0.28rem 0.62rem;
 }
 
 .agent-card h2 {
-  font-size: 1.65rem;
-  line-height: 1.15;
+  font-size: 1.42rem;
+  line-height: 1.18;
   margin: 0;
 }
 
 .agent-card-description {
   color: #475569;
-  line-height: 1.78;
+  font-size: 0.94rem;
+  line-height: 1.66;
   margin: 0;
 }
 
 .agent-card-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.55rem;
+  gap: 0.45rem;
   margin-top: auto;
 }
 
 .agent-card-tag {
   background: color-mix(in srgb, var(--home-card-accent-soft) 68%, white 32%);
-  border-radius: 999px;
+  border-radius: 0.9rem;
   color: var(--home-card-accent-strong);
-  font-size: 0.8rem;
-  padding: 0.42rem 0.7rem;
+  font-size: 0.74rem;
+  padding: 0.34rem 0.58rem;
 }
 
 .agent-card-footer {
@@ -319,8 +324,9 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
   display: flex;
   flex-direction: column;
   gap: 0.28rem;
-  margin-top: 0.25rem;
-  padding-top: 0.9rem;
+  margin-top: 0.15rem;
+  padding-top: 0.78rem;
+  font-size: 0.9rem;
 }
 
 .agent-card-footer strong {
@@ -331,25 +337,27 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
 
 .home-note-grid {
   display: grid;
-  gap: 1rem;
+  gap: 0.85rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 1.2rem;
+  margin-top: 0.9rem;
 }
 
 .home-note {
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 1.35rem;
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+  border-radius: 1.15rem;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
   color: #475569;
-  line-height: 1.75;
-  padding: 1rem;
+  font-size: 0.92rem;
+  line-height: 1.66;
+  padding: 0.85rem 0.92rem;
 }
 
 .home-note-title {
   color: #172033;
+  font-size: 0.88rem;
   font-weight: 700;
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.42rem;
 }
 
 .home-note code {
@@ -365,19 +373,34 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
   .home-note-grid {
     grid-template-columns: 1fr;
   }
+
+  .home-hero {
+    min-height: auto;
+  }
+
+  .home-panel {
+    max-width: none;
+  }
 }
 
 @media (max-width: 760px) {
   .home-shell {
-    padding: 1rem 0.75rem 1.5rem;
+    padding: 0.9rem 0.75rem 1.25rem;
   }
 
   .home-hero {
-    padding: 1.3rem;
+    border-radius: 1.35rem;
+    padding: 1.1rem;
+  }
+
+  .home-copy h1 {
+    font-size: clamp(1.85rem, 10vw, 2.5rem);
+    max-width: none;
   }
 
   .agent-card {
     min-height: 0;
+    padding: 0.9rem;
   }
 }
 </style>

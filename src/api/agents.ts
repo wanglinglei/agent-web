@@ -1,16 +1,15 @@
-import type { AgentsStreamOptions, AgentsStreamResult } from '../types/agents';
+import type {
+  AgentApiEnvelope,
+  AgentsConversationMessage,
+  AgentsConversationSummary,
+  AgentsStreamOptions,
+  AgentsStreamResult,
+} from '../types/agents';
 
 const AGENTS_STREAM_ENDPOINT = '/ai-agent/agents/query/stream';
 const AGENTS_CONVERSATIONS_ENDPOINT = '/ai-agent/agents/conversations';
 const HEADER_CONVERSATION_ID = 'X-Conversation-Id';
 const HEADER_AGENT_KEY = 'X-Agents-Agent-Key';
-
-interface UnifiedSuccessResponse<T> {
-  code?: number;
-  data?: T;
-  feature?: string;
-  success: boolean;
-}
 
 /**
  * Requests a structured multi-agent response.
@@ -41,7 +40,7 @@ export async function fetchAgentsAnswerStream(
 
   const conversationId =
     response.headers.get(HEADER_CONVERSATION_ID) ?? options.conversationId;
-  const body = (await response.json()) as UnifiedSuccessResponse<{
+  const body = (await response.json()) as AgentApiEnvelope<{
     agentKey?: AgentsStreamResult['agentKey'];
     conversationId?: string;
     payload?: AgentsStreamResult['payload'];
@@ -58,22 +57,38 @@ export async function fetchAgentsAnswerStream(
   };
 }
 
-export async function fetchAgentConversations(agentKey: string, page: number = 1, pageSize: number = 20): Promise<any[]> {
-  const response = await fetch(`${AGENTS_CONVERSATIONS_ENDPOINT}?agentKey=${agentKey}&page=${page}&pageSize=${pageSize}`);
+export async function fetchAgentConversations(
+  agentKey: string,
+  page = 1,
+  pageSize = 20,
+): Promise<AgentsConversationSummary[]> {
+  const response = await fetch(
+    `${AGENTS_CONVERSATIONS_ENDPOINT}?agentKey=${encodeURIComponent(agentKey)}&page=${page}&pageSize=${pageSize}`,
+  );
   if (!response.ok) {
     throw new Error('获取历史会话失败');
   }
-  const body = await response.json();
-  return body.data || body; // Depending on nestjs interceptor
+  const body = (await response.json()) as
+    | AgentApiEnvelope<AgentsConversationSummary[]>
+    | AgentsConversationSummary[];
+
+  return Array.isArray(body) ? body : (body.data ?? []);
 }
 
-export async function fetchConversationMessages(conversationId: string): Promise<any[]> {
-  const response = await fetch(`${AGENTS_CONVERSATIONS_ENDPOINT}/${conversationId}/messages`);
+export async function fetchConversationMessages(
+  conversationId: string,
+): Promise<AgentsConversationMessage[]> {
+  const response = await fetch(
+    `${AGENTS_CONVERSATIONS_ENDPOINT}/${conversationId}/messages`,
+  );
   if (!response.ok) {
     throw new Error('获取会话消息失败');
   }
-  const body = await response.json();
-  return body.data || body;
+  const body = (await response.json()) as
+    | AgentApiEnvelope<AgentsConversationMessage[]>
+    | AgentsConversationMessage[];
+
+  return Array.isArray(body) ? body : (body.data ?? []);
 }
 
 /**
@@ -86,7 +101,7 @@ export async function fetchConversationMessages(conversationId: string): Promise
 export async function updateConversationTitle(
   conversationId: string,
   title: string,
-): Promise<any> {
+): Promise<AgentsConversationSummary | null> {
   const response = await fetch(
     `${AGENTS_CONVERSATIONS_ENDPOINT}/${conversationId}/title`,
     {
@@ -102,8 +117,15 @@ export async function updateConversationTitle(
     throw new Error('重命名会话失败');
   }
 
-  const body = await response.json();
-  return body.data || body;
+  const body = (await response.json()) as
+    | AgentApiEnvelope<AgentsConversationSummary>
+    | AgentsConversationSummary;
+
+  if ('id' in body) {
+    return body;
+  }
+
+  return body.data ?? null;
 }
 
 /**

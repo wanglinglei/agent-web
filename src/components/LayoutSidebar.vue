@@ -1,38 +1,54 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { IconMoreDots } from '../assets/svg';
-
-interface HistoryConversation {
-  id: string;
-  title?: string;
-  updatedAt: string;
-}
+import type { AgentWorkbenchConfig } from '../config/types';
+import type { AgentsConversationSummary } from '../types/agents';
 
 const props = defineProps<{
-  config: any;
-  isSending: boolean;
+  config: AgentWorkbenchConfig;
   conversationId?: string;
-  historyConversations?: HistoryConversation[];
+  hasMore?: boolean;
+  historyConversations?: AgentsConversationSummary[];
+  isLoadingHistory?: boolean;
+  isSending: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: 'suggest', question: string): void;
   (e: 'reset'): void;
   (e: 'load-conversation', id: string): void;
   (e: 'load-more'): void;
   (e: 'rename-conversation', payload: { id: string; title: string }): void;
   (e: 'delete-conversation', id: string): void;
 }>();
-const activeMenuConversationId = ref('');
 
-/**
- * 格式化历史会话更新时间。
- *
- * @param dateString 时间字符串。
- * @returns 展示用时间文本。
- */
+type DialogMode = 'delete' | 'rename' | '';
+
+const activeMenuConversationId = ref('');
+const dialogMode = ref<DialogMode>('');
+const pendingConversation = ref<AgentsConversationSummary | null>(null);
+const renameValue = ref('');
+
+const dialogTitle = computed(() =>
+  dialogMode.value === 'rename' ? '重命名会话' : '删除会话',
+);
+
+const dialogDescription = computed(() => {
+  if (!pendingConversation.value) {
+    return '';
+  }
+
+  if (dialogMode.value === 'rename') {
+    return '修改后会立即同步到历史会话列表。';
+  }
+
+  return `会话“${pendingConversation.value.title || '新会话'}”删除后将无法在当前列表中恢复。`;
+});
+
 function formatTime(dateString: string): string {
-  if (!dateString) return '';
+  if (!dateString) {
+    return '';
+  }
+
   return new Intl.DateTimeFormat('zh-CN', {
     month: 'short',
     day: 'numeric',
@@ -41,84 +57,88 @@ function formatTime(dateString: string): string {
   }).format(new Date(dateString));
 }
 
-/**
- * 处理历史列表滚动加载。
- *
- * @param e 滚动事件。
- */
-function handleScroll(e: Event) {
-  const target = e.target as HTMLElement;
-  // If user scrolls near the bottom, emit load-more
-  if (target.scrollHeight - target.scrollTop - target.clientHeight < 50) {
+function handleScroll(event: Event): void {
+  if (!props.hasMore || props.isLoadingHistory) {
+    return;
+  }
+
+  const target = event.target as HTMLElement;
+  if (target.scrollHeight - target.scrollTop - target.clientHeight < 64) {
     emit('load-more');
   }
 }
 
-/**
- * 切换指定会话下拉菜单显隐。
- *
- * @param id 会话 ID。
- */
 function toggleConversationMenu(id: string): void {
   activeMenuConversationId.value =
     activeMenuConversationId.value === id ? '' : id;
 }
 
-/**
- * 关闭当前打开的会话菜单。
- */
 function closeConversationMenu(): void {
   activeMenuConversationId.value = '';
 }
 
-/**
- * 触发会话重命名。
- *
- * @param item 会话对象。
- */
-function handleRename(item: HistoryConversation): void {
-  const input = window.prompt('请输入新标题', item.title || '');
-  if (input === null) {
-    return;
-  }
-  const title = input.trim();
-  if (!title) {
-    return;
-  }
-  emit('rename-conversation', {
-    id: item.id,
-    title,
-  });
+function openRenameDialog(item: AgentsConversationSummary): void {
+  pendingConversation.value = item;
+  renameValue.value = item.title || '';
+  dialogMode.value = 'rename';
   closeConversationMenu();
 }
 
-/**
- * 触发会话删除确认。
- *
- * @param item 会话对象。
- */
-function handleDelete(item: HistoryConversation): void {
-  const confirmed = window.confirm('确认删除该历史会话吗？');
-  if (!confirmed) {
-    return;
-  }
-  emit('delete-conversation', item.id);
+function openDeleteDialog(item: AgentsConversationSummary): void {
+  pendingConversation.value = item;
+  dialogMode.value = 'delete';
   closeConversationMenu();
 }
 
-/**
- * 点击页面空白处时关闭会话菜单。
- */
+function closeDialog(): void {
+  dialogMode.value = '';
+  pendingConversation.value = null;
+  renameValue.value = '';
+}
+
+function confirmDialog(): void {
+  if (!pendingConversation.value) {
+    return;
+  }
+
+  if (dialogMode.value === 'rename') {
+    const title = renameValue.value.trim();
+    if (!title) {
+      return;
+    }
+
+    emit('rename-conversation', {
+      id: pendingConversation.value.id,
+      title,
+    });
+  }
+
+  if (dialogMode.value === 'delete') {
+    emit('delete-conversation', pendingConversation.value.id);
+  }
+
+  closeDialog();
+}
+
 function handleDocumentClick(): void {
   closeConversationMenu();
 }
 
+function handleEscape(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    closeConversationMenu();
+    closeDialog();
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick);
+  document.addEventListener('keydown', handleEscape);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleDocumentClick);
+  document.removeEventListener('keydown', handleEscape);
 });
 </script>
 
@@ -129,30 +149,34 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="reset-button"
+          :disabled="isSending"
           @click="emit('reset')"
         >
           新建会话
         </button>
       </div>
-      <div class="history-header">历史会话</div>
+
+      <div class="history-header">
+        <span>历史会话</span>
+        <span class="history-count">{{ historyConversations?.length || 0 }}</span>
+      </div>
+
       <div
         v-if="historyConversations && historyConversations.length > 0"
         class="history-scroll-shell"
       >
         <div class="history-scroll" @scroll="handleScroll">
-          <div
+          <button
             v-for="item in historyConversations"
             :key="item.id"
+            type="button"
             class="history-item"
             :class="{ active: item.id === conversationId }"
             @click="emit('load-conversation', item.id)"
           >
             <div class="history-title-row">
               <div class="history-title">{{ item.title || '新会话' }}</div>
-              <div
-                class="history-menu-wrapper"
-                @click.stop
-              >
+              <div class="history-menu-wrapper" @click.stop>
                 <button
                   type="button"
                   class="history-menu-trigger"
@@ -169,14 +193,14 @@ onBeforeUnmount(() => {
                   <button
                     type="button"
                     class="history-dropdown-item"
-                    @click.stop="handleRename(item)"
+                    @click.stop="openRenameDialog(item)"
                   >
                     重命名
                   </button>
                   <button
                     type="button"
                     class="history-dropdown-item history-dropdown-item-danger"
-                    @click.stop="handleDelete(item)"
+                    @click.stop="openDeleteDialog(item)"
                   >
                     删除
                   </button>
@@ -184,13 +208,54 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <div class="history-time">{{ formatTime(item.updatedAt) }}</div>
+          </button>
+
+          <div class="history-status">
+            <span v-if="isLoadingHistory">正在加载更多...</span>
+            <span v-else-if="hasMore">向下滚动继续加载</span>
+            <span v-else>已经到底了</span>
           </div>
         </div>
       </div>
+
       <div v-else class="history-empty">
-        暂无历史会话
+        <p class="history-empty-title">暂无历史会话</p>
+        <p class="history-empty-copy">当前 {{ config.helperTitle }} 还没有保存过的对话。</p>
       </div>
     </section>
+
+    <div
+      v-if="dialogMode"
+      class="dialog-mask"
+      @click.self="closeDialog"
+    >
+      <section class="dialog-panel">
+        <p class="dialog-kicker">{{ dialogTitle }}</p>
+        <p class="dialog-copy">{{ dialogDescription }}</p>
+
+        <textarea
+          v-if="dialogMode === 'rename'"
+          v-model="renameValue"
+          class="dialog-input"
+          rows="3"
+          placeholder="请输入新的会话标题"
+        />
+
+        <div class="dialog-actions">
+          <button type="button" class="dialog-btn dialog-btn-secondary" @click="closeDialog">
+            取消
+          </button>
+          <button
+            type="button"
+            class="dialog-btn dialog-btn-primary"
+            :disabled="dialogMode === 'rename' && !renameValue.trim()"
+            @click="confirmDialog"
+          >
+            {{ dialogMode === 'rename' ? '确认修改' : '确认删除' }}
+          </button>
+        </div>
+      </section>
+    </div>
   </aside>
 </template>
 
@@ -207,20 +272,20 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--agent-panel-bg) 70%, white 30%);
   border: 1px solid color-mix(in srgb, var(--agent-accent) 14%, white 86%);
   border-radius: 1.2rem;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
   display: flex;
-  flex-direction: column;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
 }
 
 .new-chat-wrapper {
-  padding: 1rem 1.2rem;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.7)),
     var(--agent-panel-bg);
   border-bottom: 1px solid color-mix(in srgb, var(--agent-accent) 10%, white 90%);
+  padding: 1rem 1.2rem;
 }
 
 .reset-button {
@@ -230,97 +295,96 @@ onBeforeUnmount(() => {
   color: white;
   font-weight: 700;
   padding: 0.85rem 1rem;
+  transition: opacity 0.2s ease;
   width: 100%;
-  cursor: pointer;
-  transition: opacity 0.2s;
 }
 
-.reset-button:hover {
+.reset-button:hover:not(:disabled) {
   opacity: 0.9;
 }
 
 .history-header {
-  padding: 1rem 1.2rem;
-  font-weight: 600;
-  font-size: 0.9rem;
+  align-items: center;
   color: #334155;
-  background: transparent;
+  display: flex;
+  font-size: 0.9rem;
+  font-weight: 600;
+  justify-content: space-between;
+  padding: 1rem 1.2rem 0.8rem;
+}
+
+.history-count {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
 }
 
 .history-scroll-shell {
   flex: 1;
   min-height: 0;
-  padding: 0 0.7rem 1.25rem;
+  padding: 0 0.7rem 1rem;
 }
 
 .history-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
   height: 100%;
   overflow-y: auto;
-  padding: 0;
+  padding: 0.1rem;
   scrollbar-width: thin;
-  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
-}
-
-.history-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.history-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.history-scroll::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.38);
-  border-radius: 999px;
-}
-
-.history-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 0.55);
-}
-
-.history-empty {
-  padding: 2rem;
-  text-align: center;
-  color: #94a3b8;
-  font-size: 0.85rem;
 }
 
 .history-item {
-  padding: 0.8rem 1rem;
-  border-radius: 0.8rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 0.25rem;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid transparent;
+  border-radius: 1rem;
+  color: #1e293b;
+  padding: 0.85rem 0.9rem;
+  text-align: left;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+  width: 100%;
 }
 
 .history-item:hover {
-  background: rgba(255, 255, 255, 0.5);
+  border-color: color-mix(in srgb, var(--agent-accent) 20%, white 80%);
+  transform: translateY(-1px);
 }
 
 .history-item.active {
-  background: white;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
-}
-
-.history-title {
-  flex: 1;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #1e293b;
-  margin-bottom: 0.25rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--agent-accent-soft) 78%, white 22%);
+  border-color: color-mix(in srgb, var(--agent-accent) 24%, white 76%);
 }
 
 .history-title-row {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
   gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.history-title {
+  display: -webkit-box;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.history-time {
+  color: #64748b;
+  font-size: 0.78rem;
+  margin-top: 0.45rem;
 }
 
 .history-menu-wrapper {
-  margin-left: auto;
   position: relative;
 }
 
@@ -328,78 +392,157 @@ onBeforeUnmount(() => {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 0.45rem;
+  border-radius: 999px;
   color: #64748b;
-  cursor: pointer;
   display: inline-flex;
-  height: 1.5rem;
+  height: 1.9rem;
   justify-content: center;
-  margin-left: auto;
-  opacity: 0;
-  transition: all 0.2s ease;
-  width: 1.5rem;
-}
-
-.history-item:hover .history-menu-trigger,
-.history-item.active .history-menu-trigger {
-  opacity: 1;
+  width: 1.9rem;
 }
 
 .history-menu-trigger:hover {
   background: rgba(148, 163, 184, 0.14);
-  color: #334155;
 }
 
-.history-menu-icon :deep(svg) {
-  fill: currentColor;
-  height: 0.95rem;
-  width: 0.95rem;
+.history-menu-icon {
+  display: inline-flex;
+  height: 1rem;
+  width: 1rem;
 }
 
 .history-dropdown {
   background: white;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
-  min-width: 8rem;
+  border-radius: 0.9rem;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
   padding: 0.35rem;
   position: absolute;
   right: 0;
   top: calc(100% + 0.35rem);
-  z-index: 20;
+  width: 8rem;
+  z-index: 10;
 }
 
 .history-dropdown-item {
   background: transparent;
   border: 0;
-  border-radius: 0.45rem;
-  color: #1e293b;
-  cursor: pointer;
+  border-radius: 0.65rem;
+  color: #334155;
   display: block;
-  font-size: 0.8rem;
-  padding: 0.5rem 0.6rem;
+  padding: 0.55rem 0.65rem;
   text-align: left;
   width: 100%;
 }
 
 .history-dropdown-item:hover {
-  background: #f1f5f9;
+  background: #f8fafc;
 }
 
 .history-dropdown-item-danger {
-  color: #dc2626;
+  color: #b91c1c;
 }
 
-.history-dropdown-item-danger:hover {
-  background: #fef2f2;
+.history-status {
+  color: #64748b;
+  font-size: 0.78rem;
+  padding: 0.4rem 0.2rem 0;
+  text-align: center;
 }
 
-.history-item.active .history-title {
-  color: var(--agent-accent-strong);
+.history-empty {
+  color: #475569;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.2rem;
+  text-align: center;
 }
 
-.history-time {
-  font-size: 0.75rem;
-  color: #94a3b8;
+.history-empty-title {
+  color: #172033;
+  font-weight: 700;
+  margin: 0;
+}
+
+.history-empty-copy {
+  line-height: 1.7;
+  margin: 0.65rem 0 0;
+}
+
+.dialog-mask {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.36);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 50;
+}
+
+.dialog-panel {
+  background: white;
+  border-radius: 1.3rem;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  padding: 1.25rem;
+  width: min(92vw, 28rem);
+}
+
+.dialog-kicker {
+  color: #172033;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.dialog-copy {
+  color: #475569;
+  line-height: 1.75;
+  margin: 0.65rem 0 0;
+}
+
+.dialog-input {
+  border: 1px solid #dbe4f0;
+  border-radius: 1rem;
+  font: inherit;
+  line-height: 1.6;
+  margin-top: 1rem;
+  min-height: 6rem;
+  padding: 0.8rem 0.9rem;
+  resize: vertical;
+  width: 100%;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 0.7rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.dialog-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+}
+
+.dialog-btn-secondary {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.dialog-btn-primary {
+  background: #0f172a;
+  color: white;
+}
+
+@media (max-width: 1080px) {
+  .sidebar-panel {
+    height: auto;
+  }
+
+  .history-list {
+    max-height: 24rem;
+  }
 }
 </style>

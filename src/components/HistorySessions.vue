@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue';
+import { nextTick, ref, watch } from 'vue';
+import type { AgentWorkbenchConfig } from '../config/types';
 import type { AgentsChatMessage } from '../types/agents';
 
 const props = defineProps<{
+  config: AgentWorkbenchConfig;
   messages: AgentsChatMessage[];
-  config: any;
 }>();
 
 const emit = defineEmits<{
@@ -27,35 +28,33 @@ watch(
   () => props.messages,
   async () => {
     await nextTick();
-    if (containerRef.value) {
-      containerRef.value.scrollTo({
-        top: containerRef.value.scrollHeight,
-        behavior: 'smooth',
-      });
-    }
+    containerRef.value?.scrollTo({
+      top: containerRef.value.scrollHeight,
+      behavior: 'smooth',
+    });
   },
-  { deep: true }
+  { deep: true },
 );
 </script>
 
 <template>
   <div ref="containerRef" class="messages-panel">
-    <!-- 欢迎提示页 (空状态) -->
     <div v-if="messages.length === 0" class="welcome-screen">
-      <h2 class="welcome-title">有什么我能帮你的吗？</h2>
+      <p class="welcome-kicker">{{ config.badge }}</p>
+      <h2 class="welcome-title">{{ config.assistantGreeting }}</h2>
+      <p class="welcome-description">{{ config.helperBody }}</p>
       <div class="welcome-suggestions">
         <button
           v-for="question in config.suggestedQuestions"
           :key="question"
           class="welcome-suggestion-btn"
-          @click="$emit('suggest', question)"
+          @click="emit('suggest', question)"
         >
           {{ question }}
         </button>
       </div>
     </div>
 
-    <!-- 历史会话列表 -->
     <div v-else class="message-stack">
       <article
         v-for="message in messages"
@@ -137,54 +136,78 @@ watch(
 
 <style scoped>
 .messages-panel {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  min-height: 0;
   overflow-y: auto;
   padding: 1.35rem;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 .welcome-screen {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  margin: 0 auto;
+  max-width: 860px;
   padding: 2rem;
+  text-align: center;
+}
+
+.welcome-kicker {
+  color: var(--agent-accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 0;
+  text-transform: uppercase;
 }
 
 .welcome-title {
-  font-size: 1.75rem;
-  font-weight: 600;
   color: #172033;
-  margin-bottom: 2rem;
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0.9rem 0 0;
+}
+
+.welcome-description {
+  color: #475569;
+  line-height: 1.8;
+  margin: 0.85rem 0 0;
+  max-width: 48rem;
 }
 
 .welcome-suggestions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 0.8rem;
-  max-width: 800px;
+  justify-content: center;
+  margin-top: 1.6rem;
 }
 
 .welcome-suggestion-btn {
-  background: #f8fafc;
-  border: 1px solid transparent;
+  background: white;
+  border: 1px solid #dbe4f0;
   border-radius: 999px;
-  color: #475569;
-  font-size: 0.85rem;
-  padding: 0.5rem 1.25rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  color: #334155;
   cursor: pointer;
-  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  padding: 0.7rem 1rem;
+  text-align: left;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
 }
 
 .welcome-suggestion-btn:hover {
-  background: white;
-  border-color: #e2e8f0;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
-  color: #172033;
+  border-color: color-mix(in srgb, var(--agent-accent) 28%, white 72%);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
   transform: translateY(-1px);
 }
 
@@ -209,7 +232,7 @@ watch(
 .message-bubble {
   border-radius: 1.6rem;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
-  max-width: 84%;
+  max-width: min(84%, 52rem);
   padding: 1rem 1.1rem;
 }
 
@@ -253,6 +276,19 @@ watch(
   padding: 0.8rem;
 }
 
+.svg-preview {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 12rem;
+}
+
+.svg-preview-wrapper :deep(svg) {
+  height: auto;
+  max-height: 20rem;
+  max-width: 100%;
+}
+
 .bubble-actions {
   display: flex;
   gap: 0.6rem;
@@ -265,35 +301,16 @@ watch(
 
 .inline-action {
   background: white;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #dbe4f0;
   border-radius: 999px;
   color: #334155;
-  padding: 0.45rem 0.8rem;
   cursor: pointer;
+  padding: 0.48rem 0.85rem;
+  transition: border-color 160ms ease;
 }
 
 .inline-action:hover {
-  background: #f8fafc;
-}
-
-.svg-preview-wrapper {
-  align-items: center;
-  aspect-ratio: 1 / 1;
-  display: flex;
-  justify-content: center;
-  margin: 0 auto;
-  max-width: min(100%, 560px);
-  overflow: hidden;
-  width: 100%;
-}
-
-.svg-preview :deep(svg) {
-  display: block;
-  height: 100%;
-  margin: 0 auto;
-  max-height: 100%;
-  max-width: 100%;
-  width: 100%;
+  border-color: color-mix(in srgb, var(--agent-accent) 30%, white 70%);
 }
 
 @media (max-width: 760px) {
@@ -303,6 +320,10 @@ watch(
 
   .message-bubble {
     max-width: 100%;
+  }
+
+  .welcome-screen {
+    padding: 1rem 0.25rem;
   }
 }
 </style>

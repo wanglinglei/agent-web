@@ -1,3 +1,4 @@
+import type { ComputedRef, Ref } from 'vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import {
   deleteConversation,
@@ -6,20 +7,51 @@ import {
   fetchConversationMessages,
   updateConversationTitle,
 } from '../api/agents';
+import type { AgentWorkbenchConfig } from '../config/types';
 import type {
   AgentsBoundarySvgPayload,
   AgentsChatMessage,
+  AgentsConversationMessage,
+  AgentsConversationSummary,
   AgentsEmailPayload,
   AgentsMessageRenderMeta,
   AgentsMessageRole,
   AgentsMessageStatus,
   AgentsTextPayload,
 } from '../types/agents';
-import type { AgentWorkbenchConfig } from '../config/types';
 
-export function useAgentChat(config: AgentWorkbenchConfig) {
-  const messages = ref<AgentsChatMessage[]>(createInitialMessages());
-  const historyConversations = ref<any[]>([]);
+const HISTORY_PAGE_SIZE = 20;
+
+export interface AgentChatController {
+  canSubmit: ComputedRef<boolean>;
+  closeEmailPreview: () => void;
+  conversationId: Ref<string | undefined>;
+  copySvgContent: (message: AgentsChatMessage) => Promise<void>;
+  downloadSvgContent: (message: AgentsChatMessage) => void;
+  emailPreviewContent: Ref<string>;
+  emailPreviewSubject: Ref<string>;
+  emailPreviewVisible: Ref<boolean>;
+  errorMessage: Ref<string>;
+  handleSubmit: () => Promise<void>;
+  hasMoreHistory: Ref<boolean>;
+  historyConversations: Ref<AgentsConversationSummary[]>;
+  inputValue: Ref<string>;
+  isLoadingHistory: Ref<boolean>;
+  isSending: Ref<boolean>;
+  loadConversation: (id: string) => Promise<void>;
+  loadHistoryList: (isLoadMore?: boolean) => Promise<void>;
+  messages: Ref<AgentsChatMessage[]>;
+  openEmailPreview: (message: AgentsChatMessage) => void;
+  removeConversation: (id: string) => Promise<void>;
+  renameConversation: (id: string, title: string) => Promise<void>;
+  startNewConversation: () => void;
+  submitSuggestedQuestion: (question: string) => Promise<void>;
+  cancelActiveRequest: () => void;
+}
+
+export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController {
+  const messages = ref<AgentsChatMessage[]>([]);
+  const historyConversations = ref<AgentsConversationSummary[]>([]);
   const inputValue = ref('');
   const isSending = ref(false);
   const conversationId = ref<string>();
@@ -27,75 +59,68 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
   const emailPreviewVisible = ref(false);
   const emailPreviewSubject = ref('');
   const emailPreviewContent = ref('');
-  let activeController: AbortController | null = null;
-
   const canSubmit = computed(
     () => inputValue.value.trim().length > 0 && !isSending.value,
   );
-
   const page = ref(1);
-  const hasMore = ref(true);
+  const hasMoreHistory = ref(true);
   const isLoadingHistory = ref(false);
+  let activeController: AbortController | null = null;
 
-  async function loadHistoryList(isLoadMore = false) {
-    if (isLoadingHistory.value || (!hasMore.value && isLoadMore)) return;
-    
+  async function loadHistoryList(isLoadMore = false): Promise<void> {
+    if (isLoadingHistory.value || (!hasMoreHistory.value && isLoadMore)) {
+      return;
+    }
+
     isLoadingHistory.value = true;
-    try {
-      if (!isLoadMore) {
-        page.value = 1;
-      }
-      
-      const newConversations = await fetchAgentConversations(config.agentKey, page.value, 20);
-      
-      if (newConversations.length < 20) {
-        hasMore.value = false;
-      } else {
-        hasMore.value = true;
-      }
+    errorMessage.value = '';
 
-      if (isLoadMore) {
-        historyConversations.value = [...historyConversations.value, ...newConversations];
-      } else {
-        historyConversations.value = newConversations;
-      }
-      
-      page.value++;
-    } catch (e) {
-      console.error('Failed to load history list', e);
+    try {
+      const nextPage = isLoadMore ? page.value : 1;
+      const newConversations = await fetchAgentConversations(
+        config.agentKey,
+        nextPage,
+        HISTORY_PAGE_SIZE,
+      );
+
+      hasMoreHistory.value = newConversations.length >= HISTORY_PAGE_SIZE;
+      historyConversations.value = isLoadMore
+        ? mergeConversationSummaries(
+            historyConversations.value,
+            newConversations,
+          )
+        : newConversations;
+      page.value = nextPage + 1;
+    } catch (error) {
+      console.error('Failed to load history list', error);
+      errorMessage.value = '加载历史会话失败，请稍后再试。';
     } finally {
       isLoadingHistory.value = false;
     }
   }
 
   onMounted(() => {
-    loadHistoryList();
+    void loadHistoryList();
   });
 
-  async function loadConversation(id: string) {
-    if (isSending.value) return;
+  async function loadConversation(id: string): Promise<void> {
+    if (isSending.value || conversationId.value === id) {
+      return;
+    }
+
+    errorMessage.value = '';
+
     try {
-      const msgs = await fetchConversationMessages(id);
-      messages.value = msgs.map((m: any) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        status: m.status,
-        createdAt: new Date(m.createdAt).getTime(),
-        renderMeta: m.metadata?.renderMeta,
-      }));
+      const conversationMessages = await fetchConversationMessages(id);
+      messages.value = conversationMessages.map(mapConversationMessage);
       conversationId.value = id;
-    } catch (e) {
-      console.error('Failed to load conversation messages', e);
+      closeEmailPreview();
+    } catch (error) {
+      console.error('Failed to load conversation messages', error);
+      errorMessage.value = '加载会话消息失败，请稍后再试。';
     }
   }
 
-  /**
-   * 重命名指定会话标题并同步侧边栏列表。
-   *
-   * @param id 会话 ID。
-   * @param title 新标题。
-   */
   async function renameConversation(id: string, title: string): Promise<void> {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
@@ -104,21 +129,16 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
     }
 
     try {
-      await updateConversationTitle(id, normalizedTitle);
+      const updated = await updateConversationTitle(id, normalizedTitle);
       const target = historyConversations.value.find((item) => item.id === id);
       if (target) {
-        target.title = normalizedTitle;
+        target.title = updated?.title || normalizedTitle;
       }
     } catch {
       errorMessage.value = '重命名会话失败，请稍后再试。';
     }
   }
 
-  /**
-   * 删除指定会话并在必要时重置当前聊天上下文。
-   *
-   * @param id 会话 ID。
-   */
   async function removeConversation(id: string): Promise<void> {
     try {
       await deleteConversation(id);
@@ -145,10 +165,6 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
       status,
       createdAt: Date.now(),
     };
-  }
-
-  function createInitialMessages(): AgentsChatMessage[] {
-    return [];
   }
 
   async function handleSubmit(): Promise<void> {
@@ -183,7 +199,7 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
         renderMeta: resolveMessageRenderMeta(result.payload),
         status: 'sent',
       });
-      loadHistoryList(); // refresh list
+      await loadHistoryList();
     } catch (error) {
       const messageText =
         error instanceof DOMException && error.name === 'AbortError'
@@ -202,20 +218,26 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
     }
   }
 
-  function startNewConversation(): void {
+  function cancelActiveRequest(): void {
     activeController?.abort();
+  }
+
+  function startNewConversation(): void {
+    cancelActiveRequest();
     activeController = null;
     isSending.value = false;
     conversationId.value = undefined;
     errorMessage.value = '';
     inputValue.value = '';
-    messages.value = createInitialMessages();
+    messages.value = [];
+    closeEmailPreview();
   }
 
   async function submitSuggestedQuestion(question: string): Promise<void> {
     if (isSending.value) {
       return;
     }
+
     inputValue.value = question;
     await handleSubmit();
   }
@@ -224,10 +246,11 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
     messageId: string,
     patch: Partial<Pick<AgentsChatMessage, 'content' | 'renderMeta' | 'status'>>,
   ): void {
-    const target = messages.value.find((message: AgentsChatMessage) => message.id === messageId);
+    const target = messages.value.find((message) => message.id === messageId);
     if (!target) {
       return;
     }
+
     Object.assign(target, patch);
   }
 
@@ -239,16 +262,18 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
     }
 
     if (payload.type === 'svg') {
-      if (!payload.ext.svg?.trim()) {
+      const svgText = sanitizeSvgMarkup(payload.ext.svg);
+      if (!svgText) {
         return {
           renderType: 'text',
         };
       }
+
       return {
         renderType: 'svg',
         svgFileName: payload.ext.fileName || 'boundary.svg',
         svgSummary: payload.answer || resolveSvgSummaryText(),
-        svgText: payload.ext.svg,
+        svgText,
       };
     }
 
@@ -291,6 +316,7 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
     if (message.renderMeta?.renderType !== 'email') {
       return;
     }
+
     emailPreviewSubject.value = message.renderMeta.emailSubject ?? '（无主题）';
     emailPreviewContent.value =
       message.renderMeta.emailPreview ?? message.content;
@@ -335,30 +361,129 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
   }
 
   onBeforeUnmount(() => {
-    activeController?.abort();
+    cancelActiveRequest();
   });
 
   return {
-    messages,
-    historyConversations,
-    inputValue,
-    isSending,
-    conversationId,
-    errorMessage,
-    emailPreviewVisible,
-    emailPreviewSubject,
-    emailPreviewContent,
     canSubmit,
-    loadConversation,
-    loadHistoryList,
-    renameConversation,
-    removeConversation,
-    handleSubmit,
-    startNewConversation,
-    submitSuggestedQuestion,
-    openEmailPreview,
     closeEmailPreview,
+    conversationId,
     copySvgContent,
     downloadSvgContent,
+    emailPreviewContent,
+    emailPreviewSubject,
+    emailPreviewVisible,
+    errorMessage,
+    handleSubmit,
+    hasMoreHistory,
+    historyConversations,
+    inputValue,
+    isLoadingHistory,
+    isSending,
+    loadConversation,
+    loadHistoryList,
+    messages,
+    openEmailPreview,
+    removeConversation,
+    renameConversation,
+    startNewConversation,
+    submitSuggestedQuestion,
+    cancelActiveRequest,
   };
+}
+
+function mapConversationMessage(
+  message: AgentsConversationMessage,
+): AgentsChatMessage {
+  const renderMeta = message.metadata?.renderMeta;
+
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    status: message.status,
+    createdAt: new Date(message.createdAt).getTime(),
+    renderMeta:
+      renderMeta?.renderType === 'svg'
+        ? {
+            ...renderMeta,
+            svgText: sanitizeSvgMarkup(renderMeta.svgText),
+          }
+        : renderMeta,
+  };
+}
+
+function mergeConversationSummaries(
+  current: AgentsConversationSummary[],
+  incoming: AgentsConversationSummary[],
+): AgentsConversationSummary[] {
+  const seen = new Set<string>();
+  const merged: AgentsConversationSummary[] = [];
+
+  for (const item of [...current, ...incoming]) {
+    if (seen.has(item.id)) {
+      continue;
+    }
+
+    seen.add(item.id);
+    merged.push(item);
+  }
+
+  return merged;
+}
+
+function sanitizeSvgMarkup(svgText?: string): string {
+  if (!svgText?.trim()) {
+    return '';
+  }
+
+  if (typeof DOMParser === 'undefined' || typeof XMLSerializer === 'undefined') {
+    return svgText;
+  }
+
+  try {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    const root = doc.documentElement;
+
+    if (root.nodeName.toLowerCase() !== 'svg') {
+      return '';
+    }
+
+    const blockedTags = new Set([
+      'script',
+      'foreignobject',
+      'iframe',
+      'object',
+      'embed',
+    ]);
+
+    for (const element of Array.from(root.querySelectorAll('*'))) {
+      const tagName = element.tagName.toLowerCase();
+      if (blockedTags.has(tagName)) {
+        element.remove();
+        continue;
+      }
+
+      for (const attribute of Array.from(element.attributes)) {
+        const name = attribute.name.toLowerCase();
+        const value = attribute.value.trim().toLowerCase();
+
+        if (name.startsWith('on')) {
+          element.removeAttribute(attribute.name);
+          continue;
+        }
+
+        if (
+          (name === 'href' || name === 'xlink:href') &&
+          value.startsWith('javascript:')
+        ) {
+          element.removeAttribute(attribute.name);
+        }
+      }
+    }
+
+    return new XMLSerializer().serializeToString(root);
+  } catch {
+    return '';
+  }
 }

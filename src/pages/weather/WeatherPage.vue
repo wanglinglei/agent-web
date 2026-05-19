@@ -34,8 +34,9 @@ const themeStyle = computed<Record<string, string>>(() => ({
           :config="config"
           :isSending="chat.isSending.value"
           :conversationId="chat.conversationId.value"
+          :hasMore="chat.hasMoreHistory.value"
           :historyConversations="chat.historyConversations.value"
-          @suggest="chat.submitSuggestedQuestion"
+          :isLoadingHistory="chat.isLoadingHistory.value"
           @reset="chat.startNewConversation"
           @load-conversation="chat.loadConversation"
           @rename-conversation="({ id, title }) => chat.renameConversation(id, title)"
@@ -58,6 +59,7 @@ const themeStyle = computed<Record<string, string>>(() => ({
             :config="config"
             :isSending="chat.isSending.value"
             :errorMessage="chat.errorMessage.value"
+            @cancel="chat.cancelActiveRequest"
             @submit="chat.handleSubmit"
           />
         </section>

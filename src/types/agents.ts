@@ -56,6 +56,30 @@ export interface AgentsChatMessage {
   status: AgentsMessageStatus;
 }
 
+export interface AgentsConversationSummary {
+  id: string;
+  title?: string;
+  updatedAt: string;
+}
+
+export interface AgentsConversationMessage {
+  content: string;
+  createdAt: string;
+  id: string;
+  metadata?: {
+    renderMeta?: AgentsMessageRenderMeta;
+  };
+  role: AgentsMessageRole;
+  status: AgentsMessageStatus;
+}
+
+export interface AgentApiEnvelope<T> {
+  code?: number;
+  data?: T;
+  feature?: string;
+  success?: boolean;
+}
+
 export interface AgentsStreamRequest {
   agentKey?: AgentsPreferredAgentKey;
   conversationId?: string;
