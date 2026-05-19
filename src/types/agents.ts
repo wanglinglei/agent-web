@@ -19,6 +19,7 @@ export interface AgentsEmailPayload {
   answer: string;
   ext: {
     body?: string;
+    cc?: string[];
     preview: string;
     subject: string;
     to?: string[];

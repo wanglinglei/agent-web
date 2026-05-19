@@ -38,6 +38,8 @@ const themeStyle = computed<Record<string, string>>(() => ({
           @suggest="chat.submitSuggestedQuestion"
           @reset="chat.startNewConversation"
           @load-conversation="chat.loadConversation"
+          @rename-conversation="({ id, title }) => chat.renameConversation(id, title)"
+          @delete-conversation="chat.removeConversation"
           @load-more="chat.loadHistoryList(true)"
         />
 

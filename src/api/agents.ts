@@ -77,6 +77,51 @@ export async function fetchConversationMessages(conversationId: string): Promise
 }
 
 /**
+ * 更新历史会话标题。
+ *
+ * @param conversationId 会话 ID。
+ * @param title 新标题。
+ * @returns 更新后的会话对象。
+ */
+export async function updateConversationTitle(
+  conversationId: string,
+  title: string,
+): Promise<any> {
+  const response = await fetch(
+    `${AGENTS_CONVERSATIONS_ENDPOINT}/${conversationId}/title`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error('重命名会话失败');
+  }
+
+  const body = await response.json();
+  return body.data || body;
+}
+
+/**
+ * 删除历史会话（软删除）。
+ *
+ * @param conversationId 会话 ID。
+ */
+export async function deleteConversation(conversationId: string): Promise<void> {
+  const response = await fetch(`${AGENTS_CONVERSATIONS_ENDPOINT}/${conversationId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('删除会话失败');
+  }
+}
+
+/**
  * Builds a readable error message from a failed agents response.
  *
  * @param response Failed fetch response.

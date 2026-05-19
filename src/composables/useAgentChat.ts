@@ -1,5 +1,11 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { fetchAgentsAnswerStream, fetchAgentConversations, fetchConversationMessages } from '../api/agents';
+import {
+  deleteConversation,
+  fetchAgentsAnswerStream,
+  fetchAgentConversations,
+  fetchConversationMessages,
+  updateConversationTitle,
+} from '../api/agents';
 import type {
   AgentsBoundarySvgPayload,
   AgentsChatMessage,
@@ -81,6 +87,49 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
       conversationId.value = id;
     } catch (e) {
       console.error('Failed to load conversation messages', e);
+    }
+  }
+
+  /**
+   * 重命名指定会话标题并同步侧边栏列表。
+   *
+   * @param id 会话 ID。
+   * @param title 新标题。
+   */
+  async function renameConversation(id: string, title: string): Promise<void> {
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) {
+      errorMessage.value = '会话标题不能为空。';
+      return;
+    }
+
+    try {
+      await updateConversationTitle(id, normalizedTitle);
+      const target = historyConversations.value.find((item) => item.id === id);
+      if (target) {
+        target.title = normalizedTitle;
+      }
+    } catch {
+      errorMessage.value = '重命名会话失败，请稍后再试。';
+    }
+  }
+
+  /**
+   * 删除指定会话并在必要时重置当前聊天上下文。
+   *
+   * @param id 会话 ID。
+   */
+  async function removeConversation(id: string): Promise<void> {
+    try {
+      await deleteConversation(id);
+      historyConversations.value = historyConversations.value.filter(
+        (item) => item.id !== id,
+      );
+      if (conversationId.value === id) {
+        startNewConversation();
+      }
+    } catch {
+      errorMessage.value = '删除会话失败，请稍后再试。';
     }
   }
 
@@ -302,6 +351,8 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
     canSubmit,
     loadConversation,
     loadHistoryList,
+    renameConversation,
+    removeConversation,
     handleSubmit,
     startNewConversation,
     submitSuggestedQuestion,
