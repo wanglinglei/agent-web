@@ -140,6 +140,9 @@ watch(
   flex: 1;
   overflow-y: auto;
   padding: 1.35rem;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .welcome-screen {
@@ -147,7 +150,7 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  flex: 1;
   padding: 2rem;
 }
 

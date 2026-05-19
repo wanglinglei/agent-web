@@ -1,5 +1,5 @@
-import { computed, onBeforeUnmount, ref } from 'vue';
-import { fetchAgentsAnswerStream } from '../api/agents';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { fetchAgentsAnswerStream, fetchAgentConversations, fetchConversationMessages } from '../api/agents';
 import type {
   AgentsBoundarySvgPayload,
   AgentsChatMessage,
@@ -13,6 +13,7 @@ import type { AgentWorkbenchConfig } from '../config/types';
 
 export function useAgentChat(config: AgentWorkbenchConfig) {
   const messages = ref<AgentsChatMessage[]>(createInitialMessages());
+  const historyConversations = ref<any[]>([]);
   const inputValue = ref('');
   const isSending = ref(false);
   const conversationId = ref<string>();
@@ -25,6 +26,63 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
   const canSubmit = computed(
     () => inputValue.value.trim().length > 0 && !isSending.value,
   );
+
+  const page = ref(1);
+  const hasMore = ref(true);
+  const isLoadingHistory = ref(false);
+
+  async function loadHistoryList(isLoadMore = false) {
+    if (isLoadingHistory.value || (!hasMore.value && isLoadMore)) return;
+    
+    isLoadingHistory.value = true;
+    try {
+      if (!isLoadMore) {
+        page.value = 1;
+      }
+      
+      const newConversations = await fetchAgentConversations(config.agentKey, page.value, 20);
+      
+      if (newConversations.length < 20) {
+        hasMore.value = false;
+      } else {
+        hasMore.value = true;
+      }
+
+      if (isLoadMore) {
+        historyConversations.value = [...historyConversations.value, ...newConversations];
+      } else {
+        historyConversations.value = newConversations;
+      }
+      
+      page.value++;
+    } catch (e) {
+      console.error('Failed to load history list', e);
+    } finally {
+      isLoadingHistory.value = false;
+    }
+  }
+
+  onMounted(() => {
+    loadHistoryList();
+  });
+
+  async function loadConversation(id: string) {
+    if (isSending.value) return;
+    try {
+      const msgs = await fetchConversationMessages(id);
+      messages.value = msgs.map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        status: m.status,
+        createdAt: new Date(m.createdAt).getTime(),
+        renderMeta: m.metadata?.renderMeta,
+      }));
+      conversationId.value = id;
+    } catch (e) {
+      console.error('Failed to load conversation messages', e);
+    }
+  }
 
   function createChatMessage(
     role: AgentsMessageRole,
@@ -76,6 +134,7 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
         renderMeta: resolveMessageRenderMeta(result.payload),
         status: 'sent',
       });
+      loadHistoryList(); // refresh list
     } catch (error) {
       const messageText =
         error instanceof DOMException && error.name === 'AbortError'
@@ -232,6 +291,7 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
 
   return {
     messages,
+    historyConversations,
     inputValue,
     isSending,
     conversationId,
@@ -240,6 +300,8 @@ export function useAgentChat(config: AgentWorkbenchConfig) {
     emailPreviewSubject,
     emailPreviewContent,
     canSubmit,
+    loadConversation,
+    loadHistoryList,
     handleSubmit,
     startNewConversation,
     submitSuggestedQuestion,

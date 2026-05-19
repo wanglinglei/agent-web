@@ -34,8 +34,11 @@ const themeStyle = computed<Record<string, string>>(() => ({
           :config="config"
           :isSending="chat.isSending.value"
           :conversationId="chat.conversationId.value"
+          :historyConversations="chat.historyConversations.value"
           @suggest="chat.submitSuggestedQuestion"
           @reset="chat.startNewConversation"
+          @load-conversation="chat.loadConversation"
+          @load-more="chat.loadHistoryList(true)"
         />
 
         <section class="chat-shell">
@@ -94,6 +97,7 @@ const themeStyle = computed<Record<string, string>>(() => ({
   height: 100vh;
   overflow: hidden;
   position: relative;
+  box-sizing: border-box;
 }
 
 .agent-backdrop {
@@ -124,11 +128,12 @@ const themeStyle = computed<Record<string, string>>(() => ({
   margin: 0 auto;
   max-width: 1380px;
   padding: 1.5rem 1rem 2rem;
-  height: 100%;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
 }
 
 .workbench-grid {
@@ -137,6 +142,7 @@ const themeStyle = computed<Record<string, string>>(() => ({
   grid-template-columns: 280px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+  height: 100%;
 }
 
 .chat-shell {
@@ -148,6 +154,7 @@ const themeStyle = computed<Record<string, string>>(() => ({
   flex-direction: column;
   overflow: hidden;
   height: 100%;
+  min-height: 0;
 }
 
 .drawer-mask {

@@ -73,6 +73,7 @@ function handleTextareaKeydown(event: KeyboardEvent): void {
 <style scoped>
 .composer-panel {
   padding: 0 1.35rem 1.35rem;
+  flex-shrink: 0;
 }
 
 .error-banner {

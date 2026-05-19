@@ -1,6 +1,7 @@
 import type { AgentsStreamOptions, AgentsStreamResult } from '../types/agents';
 
 const AGENTS_STREAM_ENDPOINT = '/ai-agent/agents/query/stream';
+const AGENTS_CONVERSATIONS_ENDPOINT = '/ai-agent/agents/conversations';
 const HEADER_CONVERSATION_ID = 'X-Conversation-Id';
 const HEADER_AGENT_KEY = 'X-Agents-Agent-Key';
 
@@ -55,6 +56,24 @@ export async function fetchAgentsAnswerStream(
     conversationId: data.conversationId ?? conversationId,
     payload: data.payload ?? null,
   };
+}
+
+export async function fetchAgentConversations(agentKey: string, page: number = 1, pageSize: number = 20): Promise<any[]> {
+  const response = await fetch(`${AGENTS_CONVERSATIONS_ENDPOINT}?agentKey=${agentKey}&page=${page}&pageSize=${pageSize}`);
+  if (!response.ok) {
+    throw new Error('获取历史会话失败');
+  }
+  const body = await response.json();
+  return body.data || body; // Depending on nestjs interceptor
+}
+
+export async function fetchConversationMessages(conversationId: string): Promise<any[]> {
+  const response = await fetch(`${AGENTS_CONVERSATIONS_ENDPOINT}/${conversationId}/messages`);
+  if (!response.ok) {
+    throw new Error('获取会话消息失败');
+  }
+  const body = await response.json();
+  return body.data || body;
 }
 
 /**
