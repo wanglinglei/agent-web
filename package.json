@@ -1,0 +1,30 @@
+{
+  "name": "agent-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc -b"
+  },
+  "dependencies": {
+    "@ant-design/icons-vue": "^7.0.1",
+    "@unocss/reset": "latest",
+    "ant-design-vue": "^4.2.6",
+    "ant-design-x-vue": "^1.6.0",
+    "vue": "latest",
+    "vue-router": "latest"
+  },
+  "devDependencies": {
+    "@tsconfig/node22": "latest",
+    "@types/node": "latest",
+    "@vitejs/plugin-vue": "latest",
+    "@vue/tsconfig": "latest",
+    "typescript": "latest",
+    "unocss": "latest",
+    "vite": "latest",
+    "vue-tsc": "latest"
+  }
+}
