@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import DOMPurify from 'dompurify';
+import markdownit from 'markdown-it';
 import { nextTick, ref, watch } from 'vue';
+import { Bubble } from 'ant-design-x-vue';
 import type { AgentWorkbenchConfig } from '../config/types';
 import type { AgentsChatMessage } from '../types/agents';
 
@@ -16,12 +19,87 @@ const emit = defineEmits<{
 }>();
 
 const containerRef = ref<HTMLElement>();
+const markdownRenderer = markdownit({
+  breaks: true,
+  html: true,
+  linkify: true,
+});
 
+/**
+ * 将时间戳格式化为中文时分格式。
+ *
+ * @param {number} timestamp 消息创建时间戳
+ * @returns {string}
+ */
 function formatTime(timestamp: number): string {
   return new Intl.DateTimeFormat('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
   }).format(timestamp);
+}
+
+/**
+ * 计算 Bubble 布局位置。
+ *
+ * @param {AgentsChatMessage} message 聊天消息
+ * @returns {'start' | 'end'}
+ */
+function resolvePlacement(message: AgentsChatMessage): 'start' | 'end' {
+  return message.role === 'user' ? 'end' : 'start';
+}
+
+/**
+ * 计算 Bubble 文本内容。
+ *
+ * @param {AgentsChatMessage} message 聊天消息
+ * @returns {string}
+ */
+function resolveBubbleContent(message: AgentsChatMessage): string {
+  if (message.role === 'assistant' && message.renderMeta?.renderType === 'svg') {
+    return message.renderMeta.svgSummary || '已生成 SVG 预览。';
+  }
+
+  return message.content || '正在执行任务...';
+}
+
+/**
+ * 判断当前消息是否以 Markdown 方式渲染。
+ *
+ * @param {AgentsChatMessage} message 聊天消息
+ * @returns {boolean}
+ */
+function shouldRenderMarkdownMessage(message: AgentsChatMessage): boolean {
+  if (message.role !== 'assistant') {
+    return false;
+  }
+
+  if (message.status === 'streaming' || message.status === 'error') {
+    return false;
+  }
+
+  return message.renderMeta?.renderType !== 'svg';
+}
+
+/**
+ * 将消息文本渲染为安全 Markdown HTML。
+ *
+ * @param {string} content 消息原文
+ * @returns {string}
+ */
+function renderMessageMarkdown(content: string): string {
+  return DOMPurify.sanitize(markdownRenderer.render(content), {
+    USE_PROFILES: { html: true },
+  });
+}
+
+/**
+ * 是否展示 Bubble 的加载状态。
+ *
+ * @param {AgentsChatMessage} message 聊天消息
+ * @returns {boolean}
+ */
+function isBubbleLoading(message: AgentsChatMessage): boolean {
+  return message.role === 'assistant' && message.status === 'streaming';
 }
 
 watch(
@@ -62,35 +140,44 @@ watch(
         class="message-row"
         :class="message.role === 'user' ? 'message-row-user' : 'message-row-assistant'"
       >
-        <div
-          class="message-bubble"
-          :class="[
-            message.role === 'user'
-              ? 'message-bubble-user'
-              : message.status === 'error'
-                ? 'message-bubble-error'
-                : 'message-bubble-assistant',
-          ]"
-        >
+        <div class="message-item">
           <div class="message-meta">
             <span>{{ message.role === 'user' ? '你' : config.badge }}</span>
             <span>{{ formatTime(message.createdAt) }}</span>
             <span v-if="message.status === 'streaming'">正在处理...</span>
           </div>
 
-          <p
-            v-if="message.role === 'user' || message.renderMeta?.renderType !== 'svg'"
-            class="message-text"
-          >
-            {{ message.content || '正在执行任务...' }}
-          </p>
+          <template v-if="shouldRenderMarkdownMessage(message)">
+            <div class="markdown-message bubble-content-assistant">
+              <article
+                class="markdown-body"
+                v-html="renderMessageMarkdown(resolveBubbleContent(message))"
+              />
+            </div>
+          </template>
+          <template v-else>
+            <Bubble
+              class="message-bubble"
+              :content="resolveBubbleContent(message)"
+              :placement="resolvePlacement(message)"
+              :loading="isBubbleLoading(message)"
+              :typing="message.role === 'assistant' && message.status === 'streaming'"
+              :variant="'filled'"
+              :avatar="{}"
+              :class-names="{
+                content:
+                  message.role === 'user'
+                    ? 'bubble-content-user'
+                    : message.status === 'error'
+                      ? 'bubble-content-error'
+                      : 'bubble-content-assistant',
+              }"
+            />
+          </template>
 
           <template
             v-if="message.role === 'assistant' && message.renderMeta?.renderType === 'svg'"
           >
-            <p class="message-text">
-              {{ message.renderMeta.svgSummary || '已生成 SVG 预览。' }}
-            </p>
             <div v-if="message.renderMeta.svgText" class="svg-preview-card">
               <div
                 class="svg-preview svg-preview-wrapper"
@@ -229,29 +316,89 @@ watch(
   justify-content: flex-start;
 }
 
-.message-bubble {
-  border-radius: 1.6rem;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+.message-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
   max-width: min(84%, 52rem);
-  padding: 1rem 1.1rem;
 }
 
-.message-bubble-user {
+.message-bubble {
+  max-width: 100%;
+}
+
+.message-bubble :deep(.bubble-content-user) {
   background: var(--agent-accent);
-  border-bottom-right-radius: 0.5rem;
+  border-radius: 1.15rem;
+  border-bottom-right-radius: 0.4rem;
   color: white;
+  white-space: pre-wrap;
 }
 
-.message-bubble-assistant {
+.message-bubble :deep(.bubble-content-assistant) {
   background: #f8fafc;
-  border-bottom-left-radius: 0.5rem;
+  border-radius: 1.15rem;
+  border-bottom-left-radius: 0.4rem;
   color: #1e293b;
+  white-space: pre-wrap;
 }
 
-.message-bubble-error {
+.message-bubble :deep(.bubble-content-error) {
   background: #fef2f2;
-  border-bottom-left-radius: 0.5rem;
+  border-radius: 1.15rem;
+  border-bottom-left-radius: 0.4rem;
   color: #b91c1c;
+  white-space: pre-wrap;
+}
+
+.markdown-message {
+  background: #f8fafc;
+  border-bottom-left-radius: 0.4rem;
+  border-radius: 1.15rem;
+  color: #1e293b;
+  padding: 0.75rem 0.95rem;
+  word-break: break-word;
+}
+
+.markdown-body :deep(p) {
+  margin: 0 0 0.75rem;
+}
+
+.markdown-body :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid #cbd5e1;
+  color: #475569;
+  margin: 0 0 0.9rem;
+  padding: 0.2rem 0 0.2rem 0.8rem;
+}
+
+.markdown-body :deep(a) {
+  color: #0f766e;
+  text-decoration: underline;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin: 0 0 0.9rem 1.25rem;
+  padding: 0;
+}
+
+.markdown-body :deep(pre),
+.markdown-body :deep(code) {
+  background: #f1f5f9;
+  border-radius: 0.4rem;
+}
+
+.markdown-body :deep(pre) {
+  overflow-x: auto;
+  padding: 0.8rem;
+}
+
+.markdown-body :deep(code) {
+  padding: 0.1rem 0.35rem;
 }
 
 .message-meta {
@@ -263,7 +410,7 @@ watch(
 
 .message-text {
   line-height: 1.85;
-  margin: 0.65rem 0 0;
+  margin: 0.1rem 0 0;
   white-space: pre-wrap;
 }
 
@@ -318,7 +465,7 @@ watch(
     padding: 1rem;
   }
 
-  .message-bubble {
+  .message-item {
     max-width: 100%;
   }
 

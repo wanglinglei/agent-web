@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import DOMPurify from 'dompurify';
+import markdownit from 'markdown-it';
 import { computed } from 'vue';
 import { useAgentChat } from '../../composables/useAgentChat';
 import { emailConfig } from './email.config';
@@ -9,6 +11,23 @@ import ChatInput from '../../components/ChatInput.vue';
 
 const config = emailConfig;
 const chat = useAgentChat(config);
+const markdownRenderer = markdownit({
+  breaks: true,
+  html: true,
+  linkify: true,
+});
+
+/**
+ * 将邮件预览文本渲染为安全的 Markdown HTML。
+ *
+ * @param content 原始邮件正文文本。
+ * @returns 可直接用于 v-html 的安全字符串。
+ */
+function renderEmailPreviewMarkdown(content: string): string {
+  return DOMPurify.sanitize(markdownRenderer.render(content), {
+    USE_PROFILES: { html: true },
+  });
+}
 
 const themeStyle = computed<Record<string, string>>(() => ({
   '--agent-page-bg': config.theme.pageBackground,
@@ -19,6 +38,10 @@ const themeStyle = computed<Record<string, string>>(() => ({
   '--agent-panel-bg': config.theme.panelBackground,
   '--agent-surface': config.theme.surface,
 }));
+
+const renderedEmailPreview = computed<string>(() =>
+  renderEmailPreviewMarkdown(chat.emailPreviewContent.value),
+);
 </script>
 
 <template>
@@ -88,7 +111,7 @@ const themeStyle = computed<Record<string, string>>(() => ({
         </header>
 
         <div class="drawer-body">
-          <pre class="drawer-content">{{ chat.emailPreviewContent.value }}</pre>
+          <article class="drawer-content markdown-body" v-html="renderedEmailPreview" />
         </div>
       </aside>
     </div>
@@ -211,11 +234,46 @@ const themeStyle = computed<Record<string, string>>(() => ({
 }
 
 .drawer-content {
-  font-family: inherit;
   line-height: 1.8;
   margin: 0;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.markdown-body :deep(p) {
+  margin: 0 0 0.75rem;
+}
+
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid #cbd5e1;
+  color: #475569;
+  margin: 0 0 0.9rem;
+  padding: 0.2rem 0 0.2rem 0.8rem;
+}
+
+.markdown-body :deep(a) {
+  color: #0f766e;
+  text-decoration: underline;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin: 0 0 0.9rem 1.25rem;
+  padding: 0;
+}
+
+.markdown-body :deep(pre),
+.markdown-body :deep(code) {
+  background: #f8fafc;
+  border-radius: 0.4rem;
+}
+
+.markdown-body :deep(pre) {
+  overflow-x: auto;
+  padding: 0.8rem;
+}
+
+.markdown-body :deep(code) {
+  padding: 0.1rem 0.35rem;
 }
 
 @media (max-width: 1080px) {

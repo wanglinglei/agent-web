@@ -21,6 +21,7 @@ export interface AgentsEmailPayload {
     body?: string;
     cc?: string[];
     preview: string;
+    sender?: string;
     subject: string;
     to?: string[];
   };
@@ -87,7 +88,15 @@ export interface AgentsStreamRequest {
 }
 
 export interface AgentsStreamOptions extends AgentsStreamRequest {
+  onChunk?: (chunk: string) => void;
   signal?: AbortSignal;
+}
+
+export interface AgentsSseEvent {
+  data?: string;
+  event?: string;
+  id?: string;
+  retry?: string;
 }
 
 export interface AgentsStreamResult {

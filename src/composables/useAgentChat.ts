@@ -186,16 +186,26 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
     );
 
     try {
+      let streamedAnswer = '';
       const result = await fetchAgentsAnswerStream({
         agentKey: config.agentKey,
         message,
         conversationId: conversationId.value,
+        onChunk: (chunk) => {
+          streamedAnswer += chunk;
+          updateMessage(assistantMessage.id, {
+            content: streamedAnswer,
+            status: 'streaming',
+          });
+        },
         signal: activeController.signal,
       });
 
       conversationId.value = result.conversationId;
+      const resolvedDisplayText =
+        streamedAnswer.trim() || resolveAssistantDisplayText(result.payload);
       updateMessage(assistantMessage.id, {
-        content: resolveAssistantDisplayText(result.payload),
+        content: resolvedDisplayText,
         renderMeta: resolveMessageRenderMeta(result.payload),
         status: 'sent',
       });

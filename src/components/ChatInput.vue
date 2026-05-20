@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed } from 'vue';
+import { Sender } from 'ant-design-x-vue';
 import type { AgentWorkbenchConfig } from '../config/types';
 
 const props = defineProps<{
@@ -15,8 +16,6 @@ const emit = defineEmits<{
   (e: 'cancel'): void;
 }>();
 
-const textareaRef = ref<HTMLTextAreaElement>();
-
 const inputValue = computed({
   get: () => props.modelValue,
   set: (value: string) => emit('update:modelValue', value),
@@ -26,75 +25,41 @@ const canSubmit = computed(
   () => inputValue.value.trim().length > 0 && !props.isSending,
 );
 
-function handleTextareaKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Enter' || event.shiftKey) {
+/**
+ * 处理 Sender 提交事件，保持原组件对外契约不变。
+ *
+ * @returns {void}
+ */
+function handleSenderSubmit(): void {
+  if (!canSubmit.value) {
     return;
   }
 
-  event.preventDefault();
   emit('submit');
 }
-
-function syncTextareaHeight(): void {
-  if (!textareaRef.value) {
-    return;
-  }
-
-  textareaRef.value.style.height = '0px';
-  textareaRef.value.style.height = `${Math.min(textareaRef.value.scrollHeight, 240)}px`;
-}
-
-watch(
-  () => props.modelValue,
-  async () => {
-    await nextTick();
-    syncTextareaHeight();
-  },
-);
-
-onMounted(() => {
-  syncTextareaHeight();
-});
 </script>
 
 <template>
-  <form class="composer-panel" @submit.prevent="emit('submit')">
+  <form class="composer-panel" @submit.prevent="handleSenderSubmit">
     <p v-if="errorMessage" class="error-banner">
       {{ errorMessage }}
     </p>
 
     <div class="composer-box">
-      <div class="composer-heading">
+      <div class="composer-header">
         <p class="composer-title">{{ config.helperTitle }}</p>
-        <p class="composer-hint">Enter 发送，Shift + Enter 换行</p>
       </div>
-
-      <textarea
-        ref="textareaRef"
-        v-model="inputValue"
-        rows="1"
+      <Sender
+        :value="inputValue"
+        :loading="isSending"
         :placeholder="config.placeholder || '发消息...'"
-        class="composer-input"
-        @keydown="handleTextareaKeydown"
+        :submit-type="'enter'"
+        :allow-speech="false"
+        @change="(value) => emit('update:modelValue', value)"
+        @submit="handleSenderSubmit"
+        @cancel="emit('cancel')"
       />
-
-      <div class="composer-actions">
-        <button
-          v-if="isSending"
-          type="button"
-          class="action-btn action-btn-secondary"
-          @click="emit('cancel')"
-        >
-          停止
-        </button>
-        <button
-          type="submit"
-          class="action-btn action-btn-primary"
-          :disabled="!canSubmit"
-        >
-          {{ isSending ? '处理中...' : '发送' }}
-        </button>
-      </div>
+      <p class="composer-hint">Enter 发送，Shift + Enter 换行</p>
     </div>
   </form>
 </template>
@@ -129,97 +94,39 @@ onMounted(() => {
   box-shadow: 0 6px 26px rgba(15, 23, 42, 0.08);
 }
 
-.composer-heading {
+.composer-header {
   align-items: center;
   display: flex;
-  gap: 0.75rem;
   justify-content: space-between;
-}
-
-.composer-title,
-.composer-hint {
-  margin: 0;
+  margin-bottom: 0.25rem;
 }
 
 .composer-title {
   color: #172033;
   font-size: 0.84rem;
   font-weight: 700;
+  margin: 0;
 }
 
 .composer-hint {
   color: #64748b;
   font-size: 0.72rem;
+  margin: 0.1rem 0 0;
+  text-align: right;
 }
 
-.composer-input {
-  background: transparent;
-  border: 0;
-  color: #172033;
-  font: inherit;
-  line-height: 1.55;
-  max-height: 15rem;
-  min-height: 2.6rem;
-  outline: none;
-  overflow-y: auto;
-  padding: 0;
-  resize: none;
-  width: 100%;
+.composer-box :deep(.ant-sender) {
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
 }
 
-.composer-input::placeholder {
-  color: #94a3b8;
-}
-
-.composer-actions {
-  display: flex;
-  gap: 0.6rem;
-  justify-content: flex-end;
-}
-
-.action-btn {
-  border: 0;
-  border-radius: 999px;
-  padding: 0.5rem 0.9rem;
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.action-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.action-btn-secondary {
-  background: #e2e8f0;
-  color: #334155;
-}
-
-.action-btn-primary {
-  background: #0f172a;
-  color: white;
-}
-
-.action-btn:disabled {
-  opacity: 0.5;
+.composer-box :deep(.ant-sender:focus-within) {
+  border-color: color-mix(in srgb, var(--agent-accent) 32%, white 68%);
 }
 
 @media (max-width: 760px) {
   .composer-panel {
     padding: 0 1rem 1rem;
-  }
-
-  .composer-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .composer-actions {
-    width: 100%;
-  }
-
-  .action-btn {
-    flex: 1;
   }
 }
 </style>
