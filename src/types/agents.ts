@@ -7,7 +7,7 @@ export type AgentsMessageRenderType = 'email' | 'svg' | 'text';
 export type AgentsPayloadType = 'email' | 'svg' | 'text';
 
 export interface AgentsBoundarySvgPayload {
-  answer: string;
+  answer?: string;
   ext: {
     fileName: string;
     svg?: string;
@@ -16,7 +16,7 @@ export interface AgentsBoundarySvgPayload {
 }
 
 export interface AgentsEmailPayload {
-  answer: string;
+  answer?: string;
   ext: {
     body?: string;
     cc?: string[];
@@ -29,7 +29,7 @@ export interface AgentsEmailPayload {
 }
 
 export interface AgentsTextPayload {
-  answer: string;
+  answer?: string;
   ext: Record<string, never>;
   type: 'text';
 }
@@ -89,14 +89,23 @@ export interface AgentsStreamRequest {
 
 export interface AgentsStreamOptions extends AgentsStreamRequest {
   onChunk?: (chunk: string) => void;
+  onDone?: (result: AgentsStreamResult) => void;
+  onMeta?: (meta: AgentsStreamMeta) => void;
   signal?: AbortSignal;
 }
 
+export type AgentsSseEventName = 'chunk' | 'done' | 'error' | 'meta';
+
 export interface AgentsSseEvent {
   data?: string;
-  event?: string;
+  event?: AgentsSseEventName | string;
   id?: string;
   retry?: string;
+}
+
+export interface AgentsStreamMeta {
+  conversationId?: string;
+  preferredAgentKey?: AgentsPreferredAgentKey | null;
 }
 
 export interface AgentsStreamResult {

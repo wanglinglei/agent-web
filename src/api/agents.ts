@@ -1,8 +1,10 @@
 import type {
   AgentApiEnvelope,
-  AgentsSseEvent,
   AgentsConversationMessage,
   AgentsConversationSummary,
+  AgentsSseEvent,
+  AgentsSseEventName,
+  AgentsStreamMeta,
   AgentsStreamOptions,
   AgentsStreamResult,
 } from '../types/agents';
@@ -12,6 +14,10 @@ const AGENTS_STREAM_ENDPOINT = '/ai-agent/agents/query/stream';
 const AGENTS_CONVERSATIONS_ENDPOINT = '/ai-agent/agents/conversations';
 const HEADER_CONVERSATION_ID = 'X-Conversation-Id';
 const HEADER_AGENT_KEY = 'X-Agents-Agent-Key';
+const SSE_EVENT_CHUNK: AgentsSseEventName = 'chunk';
+const SSE_EVENT_DONE: AgentsSseEventName = 'done';
+const SSE_EVENT_ERROR: AgentsSseEventName = 'error';
+const SSE_EVENT_META: AgentsSseEventName = 'meta';
 
 /**
  * Requests a structured multi-agent response.
@@ -61,7 +67,7 @@ export async function fetchAgentsAnswerStream(
       continue;
     }
 
-    if (normalized.event === 'chunk') {
+    if (normalized.event === SSE_EVENT_CHUNK) {
       const chunkData = parseJsonRecord(normalized.data);
       const chunkText = readStringField(chunkData, 'chunk');
       if (chunkText) {
@@ -70,25 +76,25 @@ export async function fetchAgentsAnswerStream(
       continue;
     }
 
-    if (normalized.event === 'meta') {
-      const metaData = parseJsonRecord(normalized.data);
-      const metaConversationId = readStringField(metaData, 'conversationId');
-      if (metaConversationId) {
+    if (normalized.event === SSE_EVENT_META) {
+      const meta = resolveStreamMeta(parseJsonRecord(normalized.data));
+      if (meta.conversationId) {
         finalResult = {
           ...finalResult,
-          conversationId: metaConversationId,
+          conversationId: meta.conversationId,
         };
       }
+      options.onMeta?.(meta);
       continue;
     }
 
-    if (normalized.event === 'error') {
+    if (normalized.event === SSE_EVENT_ERROR) {
       const errorData = parseJsonRecord(normalized.data);
       const message = readStringField(errorData, 'message');
       throw new Error(message || '办公任务处理失败，请稍后再试。');
     }
 
-    if (normalized.event === 'done') {
+    if (normalized.event === SSE_EVENT_DONE) {
       const doneData = parseJsonRecord(normalized.data);
       finalResult = {
         agentKey:
@@ -99,6 +105,7 @@ export async function fetchAgentsAnswerStream(
           finalResult.conversationId,
         payload: resolveDonePayload(doneData),
       };
+      options.onDone?.(finalResult);
     }
   }
 
@@ -223,10 +230,10 @@ async function resolveErrorMessage(response: Response): Promise<string> {
  */
 function normalizeSseEvent(
   streamEvent: AgentsSseEvent,
-): { data: string; event: string } | null {
-  const event = streamEvent.event?.trim();
+): { data: string; event: AgentsSseEventName } | null {
+  const event = streamEvent.event?.trim() as AgentsSseEventName | undefined;
   const data = streamEvent.data?.trim();
-  if (!event || !data) {
+  if (!event || !data || !isAgentsSseEventName(event)) {
     return null;
   }
 
@@ -234,6 +241,21 @@ function normalizeSseEvent(
     data,
     event,
   };
+}
+
+/**
+ * 判断是否是受支持的 SSE 事件名。
+ *
+ * @param value 原始事件名。
+ * @returns 是否是标准 Agent SSE 事件。
+ */
+function isAgentsSseEventName(value: string): value is AgentsSseEventName {
+  return (
+    value === SSE_EVENT_CHUNK ||
+    value === SSE_EVENT_DONE ||
+    value === SSE_EVENT_ERROR ||
+    value === SSE_EVENT_META
+  );
 }
 
 /**
@@ -283,6 +305,23 @@ function readRecordField(
 }
 
 /**
+ * 解析 meta 事件中的会话元信息。
+ *
+ * @param source meta 事件数据。
+ * @returns 标准化 meta 对象。
+ */
+function resolveStreamMeta(source: Record<string, unknown>): AgentsStreamMeta {
+  const preferredAgentKey = readStringField(source, 'preferredAgentKey');
+
+  return {
+    conversationId: readStringField(source, 'conversationId') || undefined,
+    preferredAgentKey: preferredAgentKey
+      ? (preferredAgentKey as AgentsStreamMeta['preferredAgentKey'])
+      : null,
+  };
+}
+
+/**
  * 解析 done 事件中的结构化 payload。
  *
  * @param source done 事件数据。
@@ -297,9 +336,8 @@ function resolveDonePayload(
   }
 
   const type = readStringField(payload, 'type');
-  const answer = readStringField(payload, 'answer');
   const ext = readRecordField(payload, 'ext');
-  if (!type || !answer || !ext) {
+  if (!type || !ext) {
     return null;
   }
 

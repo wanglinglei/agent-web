@@ -22,12 +22,6 @@ defineProps<{
         </div>
       </div>
     </div>
-
-    <div class="hero-meta">
-      <p class="hero-meta-label">固定调用入口</p>
-      <p class="hero-meta-value">/ai-agent/agents/query/stream</p>
-      <p class="hero-meta-inline">agentKey: {{ config.agentKey }}</p>
-    </div>
   </header>
 </template>
 
@@ -57,7 +51,7 @@ defineProps<{
 }
 
 .hero-copy,
-.hero-meta {
+.hero-title-group > div {
   position: relative;
   z-index: 1;
 }
@@ -65,13 +59,17 @@ defineProps<{
 .hero-copy {
   align-items: center;
   display: flex;
+  flex: 1;
   gap: 1.5rem;
+  min-width: 0;
 }
 
 .hero-title-group {
   align-items: flex-start;
   display: flex;
+  flex: 1;
   gap: 1rem;
+  min-width: 0;
 }
 
 .crumb-link {
@@ -84,6 +82,7 @@ defineProps<{
   gap: 0.4rem;
   padding: 0.3rem 0.8rem;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .icon-home {
@@ -113,6 +112,7 @@ defineProps<{
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0;
+  white-space: nowrap;
 }
 
 .hero-description {
@@ -123,46 +123,13 @@ defineProps<{
   opacity: 0.9;
 }
 
-.hero-meta {
-  align-items: center;
-  backdrop-filter: blur(14px);
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 999px;
-  display: flex;
-  gap: 1rem;
-  padding: 0.5rem 1rem;
-}
-
-.hero-meta-label {
-  display: none;
-}
-
-.hero-meta-value {
-  font-size: 0.85rem;
-  font-weight: 700;
-  margin: 0;
-}
-
-.hero-meta-inline {
-  border-left: 1px solid rgba(255, 255, 255, 0.3);
-  font-size: 0.8rem;
-  margin: 0;
-  opacity: 0.9;
-  padding-left: 1rem;
-}
-
 @media (max-width: 1080px) {
   .hero-panel {
     align-items: flex-start;
-    flex-direction: column;
-    gap: 1rem;
   }
 
   .hero-copy {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 1rem;
+    gap: 1.25rem;
   }
 }
 
@@ -171,25 +138,24 @@ defineProps<{
     padding: 1rem;
   }
 
+  .hero-copy {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
   .hero-title-group {
     flex-direction: column;
     gap: 0.65rem;
   }
 
+  .hero-copy h1 {
+    white-space: normal;
+  }
+
   .hero-badge {
     border-right: 0;
     padding-right: 0;
-  }
-
-  .hero-meta {
-    align-items: flex-start;
-    border-radius: 1rem;
-    flex-direction: column;
-  }
-
-  .hero-meta-inline {
-    border-left: 0;
-    padding-left: 0;
   }
 }
 </style>

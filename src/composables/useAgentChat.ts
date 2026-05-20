@@ -198,6 +198,11 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
             status: 'streaming',
           });
         },
+        onMeta: (meta) => {
+          if (meta.conversationId) {
+            conversationId.value = meta.conversationId;
+          }
+        },
         signal: activeController.signal,
       });
 
@@ -206,7 +211,10 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
         streamedAnswer.trim() || resolveAssistantDisplayText(result.payload);
       updateMessage(assistantMessage.id, {
         content: resolvedDisplayText,
-        renderMeta: resolveMessageRenderMeta(result.payload),
+        renderMeta: resolveMessageRenderMeta(
+          result.payload,
+          streamedAnswer.trim(),
+        ),
         status: 'sent',
       });
       await loadHistoryList();
@@ -266,6 +274,7 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
 
   function resolveMessageRenderMeta(
     payload: AgentsBoundarySvgPayload | AgentsEmailPayload | AgentsTextPayload | null,
+    streamedText = '',
   ): AgentsMessageRenderMeta | undefined {
     if (!payload) {
       return undefined;
@@ -282,7 +291,7 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
       return {
         renderType: 'svg',
         svgFileName: payload.ext.fileName || 'boundary.svg',
-        svgSummary: payload.answer || resolveSvgSummaryText(),
+        svgSummary: streamedText || resolveSvgSummaryText(),
         svgText,
       };
     }
@@ -308,14 +317,14 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
     }
 
     if (payload.type === 'email') {
-      return payload.answer || `已生成邮件草稿：${payload.ext.subject || '（无主题）'}`;
+      return `已生成邮件草稿：${payload.ext.subject || '（无主题）'}`;
     }
 
     if (payload.type === 'svg') {
-      return payload.answer || resolveSvgSummaryText();
+      return resolveSvgSummaryText();
     }
 
-    return payload.answer || 'Agent 暂时没有返回内容，请换个问法再试。';
+    return 'Agent 暂时没有返回内容，请换个问法再试。';
   }
 
   function resolveSvgSummaryText(): string {
