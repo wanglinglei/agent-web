@@ -24,6 +24,22 @@ const markdownRenderer = markdownit({
   linkify: true,
 });
 
+markdownRenderer.renderer.rules.fence = (tokens, idx) => {
+  const token = tokens[idx];
+  const language = token.info.trim().toLowerCase();
+  if (language !== 'svg') {
+    const escapedContent = markdownRenderer.utils.escapeHtml(token.content);
+    return `<pre><code>${escapedContent}</code></pre>`;
+  }
+
+  const sanitizedSvg = sanitizeSvgForMarkdown(token.content);
+  if (!sanitizedSvg) {
+    return '<pre><code></code></pre>';
+  }
+
+  return `<div class="markdown-svg-preview">${sanitizedSvg}</div>`;
+};
+
 /**
  * 将时间戳格式化为中文时分格式。
  *
@@ -91,7 +107,24 @@ function shouldRenderMarkdownMessage(message: AgentsChatMessage): boolean {
  */
 function renderMessageMarkdown(content: string): string {
   return DOMPurify.sanitize(markdownRenderer.render(content), {
-    USE_PROFILES: { html: true },
+    USE_PROFILES: { html: true, svg: true },
+  });
+}
+
+/**
+ * 对 Markdown 中的 SVG 代码块内容做安全清洗，返回可直接预览的 SVG。
+ *
+ * @param {string} svgText 原始 SVG 文本
+ * @returns {string}
+ */
+function sanitizeSvgForMarkdown(svgText: string): string {
+  const normalized = svgText.trim();
+  if (!normalized) {
+    return '';
+  }
+
+  return DOMPurify.sanitize(normalized, {
+    USE_PROFILES: { html: true, svg: true },
   });
 }
 
@@ -117,6 +150,41 @@ function isBubbleLoading(message: AgentsChatMessage): boolean {
  */
 function hasBubbleContent(message: AgentsChatMessage): boolean {
   return resolveBubbleContent(message).trim().length > 0;
+}
+
+/**
+ * 处理 Markdown 内容区点击，支持从消息内 SVG 直接下载文件。
+ *
+ * @param {MouseEvent} event 点击事件。
+ */
+function onMarkdownBodyClick(event: MouseEvent): void {
+  const target = event.target as HTMLElement | null;
+  const anchor = target?.closest('a');
+  if (!anchor) {
+    return;
+  }
+
+  const href = anchor.getAttribute('href')?.trim().toLowerCase();
+  if (href !== '#download-svg') {
+    return;
+  }
+
+  event.preventDefault();
+  const container = event.currentTarget as HTMLElement | null;
+  const svgElement = container?.querySelector('svg');
+  if (!svgElement) {
+    return;
+  }
+
+  const blob = new Blob([svgElement.outerHTML], {
+    type: 'image/svg+xml;charset=utf-8',
+  });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchorElement = document.createElement('a');
+  anchorElement.href = objectUrl;
+  anchorElement.download = `boundary-${Date.now()}.svg`;
+  anchorElement.click();
+  URL.revokeObjectURL(objectUrl);
 }
 
 watch(
@@ -171,6 +239,7 @@ watch(
               <article
                 class="markdown-body"
                 v-html="renderMessageMarkdown(resolveBubbleContent(message))"
+                @click="onMarkdownBodyClick($event)"
               />
             </div>
           </template>
@@ -383,6 +452,30 @@ watch(
 
 .markdown-body :deep(code) {
   padding: 0.1rem 0.35rem;
+}
+
+.markdown-body :deep(.markdown-svg-preview) {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.85rem;
+  display: flex;
+  height: 500px;
+  justify-content: center;
+  margin: 0.5rem 0;
+  overflow: hidden;
+  padding: 0.7rem;
+  width: 500px;
+}
+
+.markdown-body :deep(.markdown-svg-preview svg) {
+  height: 100%;
+  width: 100%;
+}
+
+.markdown-body :deep(svg) {
+  height: 500px;
+  width: 500px;
 }
 
 .message-meta {

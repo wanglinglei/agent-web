@@ -9,15 +9,12 @@ import {
 } from '../api/agents';
 import type { AgentWorkbenchConfig } from '../config/types';
 import type {
-  AgentsBoundarySvgPayload,
   AgentsChatMessage,
   AgentsConversationMessage,
   AgentsConversationSummary,
-  AgentsEmailPayload,
   AgentsMessageRenderMeta,
   AgentsMessageRole,
   AgentsMessageStatus,
-  AgentsTextPayload,
 } from '../types/agents';
 
 const HISTORY_PAGE_SIZE = 20;
@@ -207,14 +204,10 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
       });
 
       conversationId.value = result.conversationId;
-      const resolvedDisplayText =
-        streamedAnswer.trim() || resolveAssistantDisplayText(result.payload);
+      const resolvedDisplayText = streamedAnswer.trim() || resolveFallbackDisplayText();
       updateMessage(assistantMessage.id, {
         content: resolvedDisplayText,
-        renderMeta: resolveMessageRenderMeta(
-          result.payload,
-          streamedAnswer.trim(),
-        ),
+        renderMeta: resolveMessageRenderMetaFromContent(streamedAnswer),
         status: 'sent',
       });
       await loadHistoryList();
@@ -272,36 +265,16 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
     Object.assign(target, patch);
   }
 
-  function resolveMessageRenderMeta(
-    payload: AgentsBoundarySvgPayload | AgentsEmailPayload | AgentsTextPayload | null,
-    streamedText = '',
+  function resolveMessageRenderMetaFromContent(
+    streamedText: string,
   ): AgentsMessageRenderMeta | undefined {
-    if (!payload) {
+    const svgRenderMeta = extractSvgRenderMeta(streamedText);
+    if (svgRenderMeta) {
+      return svgRenderMeta;
+    }
+
+    if (!streamedText.trim()) {
       return undefined;
-    }
-
-    if (payload.type === 'svg') {
-      const svgText = sanitizeSvgMarkup(payload.ext.svg);
-      if (!svgText) {
-        return {
-          renderType: 'text',
-        };
-      }
-
-      return {
-        renderType: 'svg',
-        svgFileName: payload.ext.fileName || 'boundary.svg',
-        svgSummary: streamedText || resolveSvgSummaryText(),
-        svgText,
-      };
-    }
-
-    if (payload.type === 'email') {
-      return {
-        emailPreview: payload.ext.preview,
-        emailSubject: payload.ext.subject,
-        renderType: 'email',
-      };
     }
 
     return {
@@ -309,21 +282,7 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
     };
   }
 
-  function resolveAssistantDisplayText(
-    payload: AgentsBoundarySvgPayload | AgentsEmailPayload | AgentsTextPayload | null,
-  ): string {
-    if (!payload) {
-      return 'Agent 暂时没有返回内容，请换个问法再试。';
-    }
-
-    if (payload.type === 'email') {
-      return `已生成邮件草稿：${payload.ext.subject || '（无主题）'}`;
-    }
-
-    if (payload.type === 'svg') {
-      return resolveSvgSummaryText();
-    }
-
+  function resolveFallbackDisplayText(): string {
     return 'Agent 暂时没有返回内容，请换个问法再试。';
   }
 
@@ -505,4 +464,41 @@ function sanitizeSvgMarkup(svgText?: string): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * 从流式 Markdown 中提取 SVG 代码块并生成渲染元信息。
+ *
+ * @param streamedText 流式累积文本。
+ * @returns SVG 渲染元信息，未命中时返回 undefined。
+ */
+function extractSvgRenderMeta(
+  streamedText: string,
+): AgentsMessageRenderMeta | undefined {
+  const text = streamedText.trim();
+  if (!text) {
+    return undefined;
+  }
+
+  const svgFenceRegex = /```svg\s*([\s\S]*?)```/i;
+  const match = svgFenceRegex.exec(text);
+  if (!match) {
+    return undefined;
+  }
+
+  const rawSvgText = match[1]?.trim();
+  const svgText = sanitizeSvgMarkup(rawSvgText);
+  if (!svgText) {
+    return {
+      renderType: 'text',
+    };
+  }
+
+  const svgSummary = text.replace(svgFenceRegex, '').trim();
+  return {
+    renderType: 'svg',
+    svgFileName: 'boundary.svg',
+    svgSummary: svgSummary || '边界 SVG 已生成，可直接预览、复制或下载。',
+    svgText,
+  };
 }

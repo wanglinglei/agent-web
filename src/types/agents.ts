@@ -4,41 +4,6 @@ export type AgentsMessageStatus = 'error' | 'loading' | 'sent' | 'streaming';
 export type AgentsAgentKey = 'boundary-svg' | 'email' | 'text' | 'weather';
 export type AgentsPreferredAgentKey = Exclude<AgentsAgentKey, 'text'>;
 export type AgentsMessageRenderType = 'email' | 'svg' | 'text';
-export type AgentsPayloadType = 'email' | 'svg' | 'text';
-
-export interface AgentsBoundarySvgPayload {
-  answer?: string;
-  ext: {
-    fileName: string;
-    svg?: string;
-  };
-  type: 'svg';
-}
-
-export interface AgentsEmailPayload {
-  answer?: string;
-  ext: {
-    body?: string;
-    cc?: string[];
-    preview: string;
-    sender?: string;
-    subject: string;
-    to?: string[];
-  };
-  type: 'email';
-}
-
-export interface AgentsTextPayload {
-  answer?: string;
-  ext: Record<string, never>;
-  type: 'text';
-}
-
-export type AgentsStructuredPayload =
-  | AgentsBoundarySvgPayload
-  | AgentsEmailPayload
-  | AgentsTextPayload;
-
 export interface AgentsMessageRenderMeta {
   emailPreview?: string;
   emailSubject?: string;
@@ -111,5 +76,4 @@ export interface AgentsStreamMeta {
 export interface AgentsStreamResult {
   agentKey: AgentsAgentKey;
   conversationId?: string;
-  payload: AgentsStructuredPayload | null;
 }

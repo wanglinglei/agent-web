@@ -6,7 +6,6 @@ import type { AgentsChatMessage } from '../../types/agents';
 import LayoutSidebar from '../../components/LayoutSidebar.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import HistorySessions from '../../components/HistorySessions.vue';
-import HistoryMessageExtras from './components/HistoryMessageExtras.vue';
 import ChatInput from '../../components/ChatInput.vue';
 
 const config = boundarySvgConfig;
@@ -19,10 +18,6 @@ const chat = useAgentChat(config);
  * @returns {string}
  */
 function resolveHistoryMessageContent(message: AgentsChatMessage): string {
-  if (message.role === 'assistant' && message.renderMeta?.renderType === 'svg') {
-    return message.renderMeta.svgSummary || '已生成 SVG 预览。';
-  }
-
   return message.content || '正在执行任务...';
 }
 
@@ -81,15 +76,7 @@ const themeStyle = computed<Record<string, string>>(() => ({
             :resolve-message-content="resolveHistoryMessageContent"
             :should-render-markdown-message="shouldRenderHistoryMarkdownMessage"
             @suggest="chat.submitSuggestedQuestion"
-          >
-            <template #message-extra="{ message }">
-              <HistoryMessageExtras
-                :message="message"
-                :on-copy-svg="chat.copySvgContent"
-                :on-download-svg="chat.downloadSvgContent"
-              />
-            </template>
-          </HistorySessions>
+          />
 
           <ChatInput
             v-model="chat.inputValue.value"

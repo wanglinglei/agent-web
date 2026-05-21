@@ -56,7 +56,6 @@ export async function fetchAgentsAnswerStream(
       'text',
     conversationId:
       response.headers.get(HEADER_CONVERSATION_ID) ?? options.conversationId,
-    payload: null,
   };
 
   for await (const streamEvent of XStream({
@@ -103,7 +102,6 @@ export async function fetchAgentsAnswerStream(
         conversationId:
           readStringField(doneData, 'conversationId') ||
           finalResult.conversationId,
-        payload: resolveDonePayload(doneData),
       };
       options.onDone?.(finalResult);
     }
@@ -288,23 +286,6 @@ function readStringField(source: Record<string, unknown>, key: string): string {
 }
 
 /**
- * 从对象字段中读取对象值。
- *
- * @param source 来源对象。
- * @param key 字段名。
- * @returns 对象字段值。
- */
-function readRecordField(
-  source: Record<string, unknown>,
-  key: string,
-): Record<string, unknown> | undefined {
-  const value = source[key];
-  return typeof value === 'object' && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
-/**
  * 解析 meta 事件中的会话元信息。
  *
  * @param source meta 事件数据。
@@ -319,27 +300,4 @@ function resolveStreamMeta(source: Record<string, unknown>): AgentsStreamMeta {
       ? (preferredAgentKey as AgentsStreamMeta['preferredAgentKey'])
       : null,
   };
-}
-
-/**
- * 解析 done 事件中的结构化 payload。
- *
- * @param source done 事件数据。
- * @returns 标准化 payload。
- */
-function resolveDonePayload(
-  source: Record<string, unknown>,
-): AgentsStreamResult['payload'] {
-  const payload = readRecordField(source, 'payload');
-  if (!payload) {
-    return null;
-  }
-
-  const type = readStringField(payload, 'type');
-  const ext = readRecordField(payload, 'ext');
-  if (!type || !ext) {
-    return null;
-  }
-
-  return payload as unknown as AgentsStreamResult['payload'];
 }
