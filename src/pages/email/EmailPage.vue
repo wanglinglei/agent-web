@@ -158,6 +158,7 @@ const renderedEmailPreview = computed<string>(() =>
 .agent-page {
   background: var(--agent-page-bg);
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
@@ -190,8 +191,9 @@ const renderedEmailPreview = computed<string>(() =>
 .agent-layout {
   margin: 0 auto;
   max-width: 1380px;
-  padding: 1.5rem 1rem 2rem;
+  padding: 1.5rem 1rem calc(2rem + env(safe-area-inset-bottom, 0px));
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   position: relative;

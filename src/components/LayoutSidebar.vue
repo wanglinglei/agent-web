@@ -333,8 +333,9 @@ onBeforeUnmount(() => {
   gap: 0.6rem;
   height: 100%;
   overflow-y: auto;
-  padding: 0.1rem;
+  padding: 0.1rem 0.1rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
   scrollbar-width: thin;
+  overscroll-behavior: contain;
 }
 
 .history-item {
@@ -445,7 +446,7 @@ onBeforeUnmount(() => {
 .history-status {
   color: #64748b;
   font-size: 0.78rem;
-  padding: 0.4rem 0.2rem 0;
+  padding: 0.4rem 0.2rem calc(0.4rem + env(safe-area-inset-bottom, 0px));
   text-align: center;
 }
 
