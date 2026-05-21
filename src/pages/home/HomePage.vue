@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { AGENT_WORKBENCH_LIST } from '../../config/agents';
-import type { AgentWorkbenchConfig } from '../../config/types';
+import { HOME_PAGE_CARD_LIST } from './constant';
+import type { HomePageCardConfig } from './constant';
 
-function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> {
+function resolveCardStyle(config: HomePageCardConfig): Record<string, string> {
   return {
     '--home-card-accent': config.theme.accent,
     '--home-card-accent-soft': config.theme.accentSoft,
@@ -39,7 +39,7 @@ function resolveCardStyle(config: AgentWorkbenchConfig): Record<string, string> 
 
       <section class="home-grid">
         <RouterLink
-          v-for="agent in AGENT_WORKBENCH_LIST"
+          v-for="agent in HOME_PAGE_CARD_LIST"
           :key="agent.route"
           :to="agent.route"
           class="agent-card"
