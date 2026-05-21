@@ -4,9 +4,11 @@ import markdownit from 'markdown-it';
 import { computed } from 'vue';
 import { useAgentChat } from '../../composables/useAgentChat';
 import { emailConfig } from './email.config';
+import type { AgentsChatMessage } from '../../types/agents';
 import LayoutSidebar from '../../components/LayoutSidebar.vue';
 import PageHeader from '../../components/PageHeader.vue';
 import HistorySessions from '../../components/HistorySessions.vue';
+import HistoryMessageExtras from './components/HistoryMessageExtras.vue';
 import ChatInput from '../../components/ChatInput.vue';
 
 const config = emailConfig;
@@ -27,6 +29,34 @@ function renderEmailPreviewMarkdown(content: string): string {
   return DOMPurify.sanitize(markdownRenderer.render(content), {
     USE_PROFILES: { html: true },
   });
+}
+
+/**
+ * 计算聊天区域中每条消息的基础展示文本。
+ *
+ * @param {AgentsChatMessage} message 聊天消息。
+ * @returns {string}
+ */
+function resolveHistoryMessageContent(message: AgentsChatMessage): string {
+  return message.content || '正在执行任务...';
+}
+
+/**
+ * 判断当前消息是否使用 Markdown 容器渲染。
+ *
+ * @param {AgentsChatMessage} message 聊天消息。
+ * @returns {boolean}
+ */
+function shouldRenderHistoryMarkdownMessage(message: AgentsChatMessage): boolean {
+  if (message.role !== 'assistant') {
+    return false;
+  }
+
+  if (message.status === 'error') {
+    return false;
+  }
+
+  return message.renderMeta?.renderType !== 'email';
 }
 
 const themeStyle = computed<Record<string, string>>(() => ({
@@ -71,11 +101,17 @@ const renderedEmailPreview = computed<string>(() =>
           <HistorySessions
             :config="config"
             :messages="chat.messages.value"
-            @copy-svg="chat.copySvgContent"
-            @download-svg="chat.downloadSvgContent"
-            @open-email="chat.openEmailPreview"
+            :resolve-message-content="resolveHistoryMessageContent"
+            :should-render-markdown-message="shouldRenderHistoryMarkdownMessage"
             @suggest="chat.submitSuggestedQuestion"
-          />
+          >
+            <template #message-extra="{ message }">
+              <HistoryMessageExtras
+                :message="message"
+                :on-open-email="chat.openEmailPreview"
+              />
+            </template>
+          </HistorySessions>
 
           <ChatInput
             v-model="chat.inputValue.value"

@@ -1,21 +1,20 @@
 <script setup lang="ts">
-import DOMPurify from 'dompurify';
-import markdownit from 'markdown-it';
-import { nextTick, ref, watch } from 'vue';
-import { Bubble } from 'ant-design-x-vue';
-import type { AgentWorkbenchConfig } from '../config/types';
-import type { AgentsChatMessage } from '../types/agents';
+import DOMPurify from "dompurify";
+import markdownit from "markdown-it";
+import { nextTick, ref, watch } from "vue";
+import { Bubble } from "ant-design-x-vue";
+import type { AgentWorkbenchConfig } from "../config/types";
+import type { AgentsChatMessage } from "../types/agents";
 
 const props = defineProps<{
   config: AgentWorkbenchConfig;
   messages: AgentsChatMessage[];
+  resolveMessageContent?: (message: AgentsChatMessage) => string;
+  shouldRenderMarkdownMessage?: (message: AgentsChatMessage) => boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: 'copy-svg', message: AgentsChatMessage): void;
-  (e: 'download-svg', message: AgentsChatMessage): void;
-  (e: 'open-email', message: AgentsChatMessage): void;
-  (e: 'suggest', question: string): void;
+  (e: "suggest", question: string): void;
 }>();
 
 const containerRef = ref<HTMLElement>();
@@ -32,9 +31,9 @@ const markdownRenderer = markdownit({
  * @returns {string}
  */
 function formatTime(timestamp: number): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(timestamp);
 }
 
@@ -44,8 +43,8 @@ function formatTime(timestamp: number): string {
  * @param {AgentsChatMessage} message 聊天消息
  * @returns {'start' | 'end'}
  */
-function resolvePlacement(message: AgentsChatMessage): 'start' | 'end' {
-  return message.role === 'user' ? 'end' : 'start';
+function resolvePlacement(message: AgentsChatMessage): "start" | "end" {
+  return message.role === "user" ? "end" : "start";
 }
 
 /**
@@ -55,11 +54,11 @@ function resolvePlacement(message: AgentsChatMessage): 'start' | 'end' {
  * @returns {string}
  */
 function resolveBubbleContent(message: AgentsChatMessage): string {
-  if (message.role === 'assistant' && message.renderMeta?.renderType === 'svg') {
-    return message.renderMeta.svgSummary || '已生成 SVG 预览。';
+  if (props.resolveMessageContent) {
+    return props.resolveMessageContent(message);
   }
 
-  return message.content || '正在执行任务...';
+  return message.content || "正在执行任务...";
 }
 
 /**
@@ -69,15 +68,19 @@ function resolveBubbleContent(message: AgentsChatMessage): string {
  * @returns {boolean}
  */
 function shouldRenderMarkdownMessage(message: AgentsChatMessage): boolean {
-  if (message.role !== 'assistant') {
+  if (props.shouldRenderMarkdownMessage) {
+    return props.shouldRenderMarkdownMessage(message);
+  }
+
+  if (message.role !== "assistant") {
     return false;
   }
 
-  if (message.status === 'streaming' || message.status === 'error') {
+  if (message.status === "error") {
     return false;
   }
 
-  return message.renderMeta?.renderType !== 'svg';
+  return true;
 }
 
 /**
@@ -99,7 +102,21 @@ function renderMessageMarkdown(content: string): string {
  * @returns {boolean}
  */
 function isBubbleLoading(message: AgentsChatMessage): boolean {
-  return message.role === 'assistant' && message.status === 'streaming';
+  return (
+    message.role === "assistant" &&
+    message.status === "streaming" &&
+    !hasBubbleContent(message)
+  );
+}
+
+/**
+ * 判断 Bubble 是否已有可展示文本。
+ *
+ * @param {AgentsChatMessage} message 聊天消息
+ * @returns {boolean}
+ */
+function hasBubbleContent(message: AgentsChatMessage): boolean {
+  return resolveBubbleContent(message).trim().length > 0;
 }
 
 watch(
@@ -108,7 +125,7 @@ watch(
     await nextTick();
     containerRef.value?.scrollTo({
       top: containerRef.value.scrollHeight,
-      behavior: 'smooth',
+      behavior: "smooth",
     });
   },
   { deep: true },
@@ -138,11 +155,13 @@ watch(
         v-for="message in messages"
         :key="message.id"
         class="message-row"
-        :class="message.role === 'user' ? 'message-row-user' : 'message-row-assistant'"
+        :class="
+          message.role === 'user' ? 'message-row-user' : 'message-row-assistant'
+        "
       >
         <div class="message-item">
           <div class="message-meta">
-            <span>{{ message.role === 'user' ? '你' : config.badge }}</span>
+            <span>{{ message.role === "user" ? "你" : config.badge }}</span>
             <span>{{ formatTime(message.createdAt) }}</span>
             <span v-if="message.status === 'streaming'">正在处理...</span>
           </div>
@@ -161,7 +180,11 @@ watch(
               :content="resolveBubbleContent(message)"
               :placement="resolvePlacement(message)"
               :loading="isBubbleLoading(message)"
-              :typing="message.role === 'assistant' && message.status === 'streaming'"
+              :typing="
+                message.role === 'assistant' &&
+                message.status === 'streaming' &&
+                !hasBubbleContent(message)
+              "
               :variant="'filled'"
               :avatar="{}"
               :class-names="{
@@ -175,46 +198,7 @@ watch(
             />
           </template>
 
-          <template
-            v-if="message.role === 'assistant' && message.renderMeta?.renderType === 'svg'"
-          >
-            <div v-if="message.renderMeta.svgText" class="svg-preview-card">
-              <div
-                class="svg-preview svg-preview-wrapper"
-                v-html="message.renderMeta.svgText"
-              />
-            </div>
-            <div class="bubble-actions">
-              <button
-                type="button"
-                class="inline-action"
-                @click="emit('copy-svg', message)"
-              >
-                复制 SVG
-              </button>
-              <button
-                type="button"
-                class="inline-action"
-                @click="emit('download-svg', message)"
-              >
-                下载 SVG
-              </button>
-            </div>
-          </template>
-
-          <template
-            v-if="message.role === 'assistant' && message.renderMeta?.renderType === 'email'"
-          >
-            <div class="bubble-actions bubble-actions-right">
-              <button
-                type="button"
-                class="inline-action"
-                @click="emit('open-email', message)"
-              >
-                预览正文
-              </button>
-            </div>
-          </template>
+          <slot name="message-extra" :message="message" />
         </div>
       </article>
     </div>
@@ -412,52 +396,6 @@ watch(
   line-height: 1.85;
   margin: 0.1rem 0 0;
   white-space: pre-wrap;
-}
-
-.svg-preview-card {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 1.25rem;
-  margin-top: 0.8rem;
-  overflow: hidden;
-  padding: 0.8rem;
-}
-
-.svg-preview {
-  align-items: center;
-  display: flex;
-  justify-content: center;
-  min-height: 12rem;
-}
-
-.svg-preview-wrapper :deep(svg) {
-  height: auto;
-  max-height: 20rem;
-  max-width: 100%;
-}
-
-.bubble-actions {
-  display: flex;
-  gap: 0.6rem;
-  margin-top: 0.8rem;
-}
-
-.bubble-actions-right {
-  justify-content: flex-end;
-}
-
-.inline-action {
-  background: white;
-  border: 1px solid #dbe4f0;
-  border-radius: 999px;
-  color: #334155;
-  cursor: pointer;
-  padding: 0.48rem 0.85rem;
-  transition: border-color 160ms ease;
-}
-
-.inline-action:hover {
-  border-color: color-mix(in srgb, var(--agent-accent) 30%, white 70%);
 }
 
 @media (max-width: 760px) {
