@@ -36,6 +36,14 @@ export const router = createRouter({
         title: '边界 SVG Agent',
       },
     },
+    {
+      path: '/template-data',
+      name: 'agents-template-data',
+      component: () => import('../pages/template-data/TemplateDataPage.vue'),
+      meta: {
+        title: '模板扩展 Agent',
+      },
+    },
   ],
 });
 

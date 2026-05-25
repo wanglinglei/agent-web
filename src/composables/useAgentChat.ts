@@ -15,6 +15,9 @@ import type {
   AgentsMessageRenderMeta,
   AgentsMessageRole,
   AgentsMessageStatus,
+  TemplateDataItem,
+  TemplateDataPatch,
+  TemplateDataStreamChunk,
 } from '../types/agents';
 
 const HISTORY_PAGE_SIZE = 20;
@@ -170,6 +173,11 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
     if (!message || isSending.value) {
       return;
     }
+    const requestMessage = normalizeTemplateDataRequestMessage(
+      config.agentKey,
+      message,
+      messages.value,
+    );
 
     errorMessage.value = '';
     inputValue.value = '';
@@ -184,14 +192,39 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
 
     try {
       let streamedAnswer = '';
+      const templateDataItems: Array<TemplateDataItem | undefined> = [];
+      const templateDataPatches: Array<TemplateDataPatch | undefined> = [];
+      let hasTemplateDataChunk = false;
       const result = await fetchAgentsAnswerStream({
         agentKey: config.agentKey,
-        message,
+        message: requestMessage,
         conversationId: conversationId.value,
         onChunk: (chunk) => {
-          streamedAnswer += chunk;
+          if (typeof chunk === 'string') {
+            streamedAnswer += chunk;
+            updateMessage(assistantMessage.id, {
+              content: streamedAnswer,
+              status: 'streaming',
+            });
+            return;
+          }
+
+          hasTemplateDataChunk = true;
+          applyTemplateDataChunk(chunk, templateDataItems, templateDataPatches);
+          const normalizedItems = compactTemplateDataItems(templateDataItems);
+          const normalizedPatches = compactTemplateDataPatches(templateDataPatches);
           updateMessage(assistantMessage.id, {
-            content: streamedAnswer,
+            content: resolveTemplateDataSummary(
+              normalizedItems,
+              normalizedPatches,
+              chunk.total,
+              chunk.mode,
+            ),
+            renderMeta: {
+              renderType: 'template-data',
+              templateDataItems: normalizedItems,
+              templateDataPatches: normalizedPatches,
+            },
             status: 'streaming',
           });
         },
@@ -204,6 +237,27 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
       });
 
       conversationId.value = result.conversationId;
+      if (hasTemplateDataChunk) {
+        const normalizedItems = compactTemplateDataItems(templateDataItems);
+        const normalizedPatches = compactTemplateDataPatches(templateDataPatches);
+        updateMessage(assistantMessage.id, {
+          content: resolveTemplateDataSummary(
+            normalizedItems,
+            normalizedPatches,
+            normalizedItems.length + normalizedPatches.length,
+            normalizedPatches.length ? 'edit' : 'generate',
+          ),
+          renderMeta: {
+            renderType: 'template-data',
+            templateDataItems: normalizedItems,
+            templateDataPatches: normalizedPatches,
+          },
+          status: 'sent',
+        });
+        await loadHistoryList();
+        return;
+      }
+
       const resolvedDisplayText = streamedAnswer.trim() || resolveFallbackDisplayText();
       updateMessage(assistantMessage.id, {
         content: resolvedDisplayText,
@@ -286,10 +340,6 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
     return 'Agent 暂时没有返回内容，请换个问法再试。';
   }
 
-  function resolveSvgSummaryText(): string {
-    return '边界 SVG 已生成，可直接预览、复制或下载。';
-  }
-
   function openEmailPreview(message: AgentsChatMessage): void {
     if (message.renderMeta?.renderType !== 'email') {
       return;
@@ -368,6 +418,82 @@ export function useAgentChat(config: AgentWorkbenchConfig): AgentChatController 
     submitSuggestedQuestion,
     cancelActiveRequest,
   };
+}
+
+/**
+ * 将模板扩展页面中的自然语言输入自动转换为编辑模式请求。
+ *
+ * @param agentKey 当前业务页对应的 agent key。
+ * @param message 用户原始输入。
+ * @param sourceMessages 当前会话消息。
+ * @returns 可直接发送给后端的请求字符串。
+ */
+function normalizeTemplateDataRequestMessage(
+  agentKey: string,
+  message: string,
+  sourceMessages: AgentsChatMessage[],
+): string {
+  if (agentKey !== 'template-data') {
+    return message;
+  }
+
+  if (isLikelyJsonObjectMessage(message)) {
+    return message;
+  }
+
+  // 显式携带了“示例文件/模版JSON”上下文时，保留自然语言原文交给后端解析。
+  if (message.includes('示例文件:') || message.includes('模版JSON:')) {
+    return message;
+  }
+
+  const latestItems = resolveLatestTemplateDataItemsFromMessages(sourceMessages);
+  if (!latestItems.length) {
+    return message;
+  }
+
+  return JSON.stringify({
+    mode: 'edit',
+    editInstruction: message,
+    baseItems: latestItems,
+  });
+}
+
+/**
+ * 判断输入是否是 JSON 对象字符串。
+ *
+ * @param message 用户输入。
+ * @returns 是否可按 JSON 对象解析。
+ */
+function isLikelyJsonObjectMessage(message: string): boolean {
+  const normalized = message.trim();
+  if (!normalized.startsWith('{') || !normalized.endsWith('}')) {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(normalized) as unknown;
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 从消息列表中提取最近一次模板扩展“生成模式”的结果数组。
+ *
+ * @param sourceMessages 当前消息列表。
+ * @returns 最新人员模板数组。
+ */
+function resolveLatestTemplateDataItemsFromMessages(
+  sourceMessages: AgentsChatMessage[],
+): TemplateDataItem[] {
+  const reversed = [...sourceMessages].reverse();
+  const latestMessage = reversed.find(
+    (item) =>
+      item.role === 'assistant' &&
+      item.renderMeta?.renderType === 'template-data' &&
+      (item.renderMeta.templateDataItems?.length ?? 0) > 0,
+  );
+  return latestMessage?.renderMeta?.templateDataItems ?? [];
 }
 
 function mapConversationMessage(
@@ -501,4 +627,70 @@ function extractSvgRenderMeta(
     svgSummary: svgSummary || '边界 SVG 已生成，可直接预览、复制或下载。',
     svgText,
   };
+}
+
+/**
+ * 将模板扩展流式分片应用到本地缓存数组。
+ *
+ * @param chunk 结构化分片。
+ * @param items 人员结果缓存。
+ * @param patches 变更补丁缓存。
+ */
+function applyTemplateDataChunk(
+  chunk: TemplateDataStreamChunk,
+  items: Array<TemplateDataItem | undefined>,
+  patches: Array<TemplateDataPatch | undefined>,
+): void {
+  if (chunk.type === 'item' && chunk.item) {
+    items[chunk.index] = chunk.item;
+    return;
+  }
+  if (chunk.type === 'patch' && chunk.patch) {
+    patches[chunk.index] = chunk.patch;
+  }
+}
+
+/**
+ * 压缩人员结果缓存，移除空位。
+ *
+ * @param items 人员结果缓存。
+ * @returns 连续数组。
+ */
+function compactTemplateDataItems(
+  items: Array<TemplateDataItem | undefined>,
+): TemplateDataItem[] {
+  return items.filter((item): item is TemplateDataItem => Boolean(item));
+}
+
+/**
+ * 压缩补丁缓存，移除空位。
+ *
+ * @param patches 补丁缓存。
+ * @returns 连续数组。
+ */
+function compactTemplateDataPatches(
+  patches: Array<TemplateDataPatch | undefined>,
+): TemplateDataPatch[] {
+  return patches.filter((patch): patch is TemplateDataPatch => Boolean(patch));
+}
+
+/**
+ * 生成模板扩展场景的消息摘要文本。
+ *
+ * @param items 人员结果列表。
+ * @param patches 补丁列表。
+ * @param total 总计数量。
+ * @param mode 当前模式。
+ * @returns 可展示文案。
+ */
+function resolveTemplateDataSummary(
+  items: TemplateDataItem[],
+  patches: TemplateDataPatch[],
+  total: number,
+  mode: 'edit' | 'generate',
+): string {
+  if (mode === 'edit') {
+    return `已解析补丁 ${patches.length}/${Math.max(total, patches.length)} 条。`;
+  }
+  return `已生成人员模板 ${items.length}/${Math.max(total, items.length)} 条。`;
 }

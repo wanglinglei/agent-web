@@ -23,7 +23,7 @@ function resolveCardStyle(config: HomePageCardConfig): Record<string, string> {
           <p class="home-kicker">Agent Web</p>
           <h1>Agent 工作台</h1>
           <p class="home-description">
-            选择一个子 Agent 直接进入对应业务页。天气、邮件、边界 SVG
+            选择一个子 Agent 直接进入对应业务页。天气、邮件、边界 SVG、模板扩展
             现在独立运行，并固定携带对应 <code>agentKey</code> 调用后端。
           </p>
         </div>

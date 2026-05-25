@@ -4,7 +4,11 @@ import markdownit from "markdown-it";
 import { nextTick, ref, watch } from "vue";
 import { Bubble } from "ant-design-x-vue";
 import type { AgentWorkbenchConfig } from "../config/types";
-import type { AgentsChatMessage } from "../types/agents";
+import type {
+  AgentsChatMessage,
+  TemplateDataItem,
+  TemplateDataPatch,
+} from "../types/agents";
 
 const props = defineProps<{
   config: AgentWorkbenchConfig;
@@ -187,6 +191,60 @@ function onMarkdownBodyClick(event: MouseEvent): void {
   URL.revokeObjectURL(objectUrl);
 }
 
+/**
+ * 判断消息是否为模板扩展结构化渲染。
+ *
+ * @param {AgentsChatMessage} message 聊天消息。
+ * @returns {boolean}
+ */
+function isTemplateDataMessage(message: AgentsChatMessage): boolean {
+  return message.renderMeta?.renderType === "template-data";
+}
+
+/**
+ * 获取模板扩展消息中的人员结果。
+ *
+ * @param {AgentsChatMessage} message 聊天消息。
+ * @returns {TemplateDataItem[]}
+ */
+function resolveTemplateDataItems(message: AgentsChatMessage): TemplateDataItem[] {
+  return message.renderMeta?.templateDataItems ?? [];
+}
+
+/**
+ * 获取模板扩展消息中的补丁结果。
+ *
+ * @param {AgentsChatMessage} message 聊天消息。
+ * @returns {TemplateDataPatch[]}
+ */
+function resolveTemplateDataPatches(message: AgentsChatMessage): TemplateDataPatch[] {
+  return message.renderMeta?.templateDataPatches ?? [];
+}
+
+/**
+ * 将任意字段值转换成可读字符串。
+ *
+ * @param {unknown} value 字段值。
+ * @returns {string}
+ */
+function formatTemplateValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value || "（空）";
+  }
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
+  ) {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "（无法序列化）";
+  }
+}
+
 watch(
   () => props.messages,
   async () => {
@@ -234,7 +292,54 @@ watch(
             <span v-if="message.status === 'streaming'">正在处理...</span>
           </div>
 
-          <template v-if="shouldRenderMarkdownMessage(message)">
+          <template v-if="isTemplateDataMessage(message)">
+            <div class="template-data-message bubble-content-assistant">
+              <p class="template-data-summary">{{ resolveBubbleContent(message) }}</p>
+              <div
+                v-if="resolveTemplateDataItems(message).length > 0"
+                class="template-data-section"
+              >
+                <p class="template-data-title">人员数据</p>
+                <div class="template-data-list">
+                  <article
+                    v-for="(item, index) in resolveTemplateDataItems(message)"
+                    :key="`item-${message.id}-${index}`"
+                    class="template-data-card"
+                  >
+                    <p class="template-data-card-title">第 {{ index + 1 }} 条</p>
+                    <pre class="template-data-json">{{ formatTemplateValue(item) }}</pre>
+                  </article>
+                </div>
+              </div>
+              <div
+                v-if="resolveTemplateDataPatches(message).length > 0"
+                class="template-data-section"
+              >
+                <p class="template-data-title">修改补丁</p>
+                <div class="template-data-list">
+                  <article
+                    v-for="(patch, index) in resolveTemplateDataPatches(message)"
+                    :key="`patch-${message.id}-${index}`"
+                    class="template-data-card"
+                  >
+                    <p class="template-data-card-title">
+                      {{ patch.targetName }} · {{ patch.field }}
+                    </p>
+                    <p class="template-data-card-line">
+                      新值：{{ formatTemplateValue(patch.newValue) }}
+                    </p>
+                    <p
+                      v-if="patch.reason"
+                      class="template-data-card-line template-data-card-reason"
+                    >
+                      原因：{{ patch.reason }}
+                    </p>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </template>
+          <template v-else-if="shouldRenderMarkdownMessage(message)">
             <div class="markdown-message bubble-content-assistant">
               <article
                 class="markdown-body"
@@ -411,6 +516,71 @@ watch(
   color: #1e293b;
   padding: 0.75rem 0.95rem;
   word-break: break-word;
+}
+
+.template-data-message {
+  background: #f8fafc;
+  border-bottom-left-radius: 0.4rem;
+  border-radius: 1.15rem;
+  color: #1e293b;
+  padding: 0.75rem 0.95rem;
+}
+
+.template-data-summary {
+  margin: 0;
+}
+
+.template-data-section {
+  margin-top: 0.75rem;
+}
+
+.template-data-title {
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+.template-data-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.template-data-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.7rem;
+}
+
+.template-data-card-title {
+  color: #1e293b;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.template-data-card-line {
+  color: #475569;
+  font-size: 0.8rem;
+  margin: 0.35rem 0 0;
+}
+
+.template-data-card-reason {
+  color: #64748b;
+}
+
+.template-data-json {
+  background: #f8fafc;
+  border-radius: 0.55rem;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  margin: 0.45rem 0 0;
+  overflow-x: auto;
+  padding: 0.45rem;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .markdown-body :deep(p) {

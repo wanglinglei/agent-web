@@ -7,6 +7,7 @@ import type {
   AgentsStreamMeta,
   AgentsStreamOptions,
   AgentsStreamResult,
+  TemplateDataStreamChunk,
 } from '../types/agents';
 import { XStream } from 'ant-design-x-vue';
 
@@ -68,9 +69,12 @@ export async function fetchAgentsAnswerStream(
 
     if (normalized.event === SSE_EVENT_CHUNK) {
       const chunkData = parseJsonRecord(normalized.data);
-      const chunkText = readStringField(chunkData, 'chunk');
-      if (chunkText) {
-        options.onChunk?.(chunkText);
+      const chunkValue = chunkData.chunk;
+      if (typeof chunkValue === 'string') {
+        const structuredChunk = parseTemplateDataChunk(chunkValue);
+        options.onChunk?.(structuredChunk ?? chunkValue);
+      } else if (isTemplateDataStreamChunk(chunkValue)) {
+        options.onChunk?.(chunkValue);
       }
       continue;
     }
@@ -300,4 +304,49 @@ function resolveStreamMeta(source: Record<string, unknown>): AgentsStreamMeta {
       ? (preferredAgentKey as AgentsStreamMeta['preferredAgentKey'])
       : null,
   };
+}
+
+/**
+ * 尝试将 chunk 文本解析为模板扩展结构化分片。
+ *
+ * @param value chunk 原始文本。
+ * @returns 结构化分片或 null。
+ */
+function parseTemplateDataChunk(value: string): TemplateDataStreamChunk | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{')) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (isTemplateDataStreamChunk(parsed)) {
+      return parsed;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * 判断是否是模板扩展结构化分片。
+ *
+ * @param value 任意值。
+ * @returns 是否合法。
+ */
+function isTemplateDataStreamChunk(value: unknown): value is TemplateDataStreamChunk {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const hasValidType = record.type === 'item' || record.type === 'patch';
+  const hasValidMode = record.mode === 'edit' || record.mode === 'generate';
+  return (
+    hasValidType &&
+    hasValidMode &&
+    typeof record.index === 'number' &&
+    typeof record.total === 'number'
+  );
 }

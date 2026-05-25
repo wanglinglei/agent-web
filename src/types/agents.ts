@@ -1,9 +1,35 @@
 export type AgentsMessageRole = 'assistant' | 'user';
 
 export type AgentsMessageStatus = 'error' | 'loading' | 'sent' | 'streaming';
-export type AgentsAgentKey = 'boundary-svg' | 'email' | 'text' | 'weather';
+export type AgentsAgentKey =
+  | 'boundary-svg'
+  | 'email'
+  | 'template-data'
+  | 'text'
+  | 'weather';
 export type AgentsPreferredAgentKey = Exclude<AgentsAgentKey, 'text'>;
-export type AgentsMessageRenderType = 'email' | 'svg' | 'text';
+export type AgentsMessageRenderType = 'email' | 'svg' | 'template-data' | 'text';
+
+export interface TemplateDataItem {
+  [key: string]: unknown;
+}
+
+export interface TemplateDataPatch {
+  field: string;
+  newValue: unknown;
+  reason?: string;
+  targetName: string;
+}
+
+export interface TemplateDataStreamChunk {
+  index: number;
+  item?: TemplateDataItem;
+  mode: 'edit' | 'generate';
+  patch?: TemplateDataPatch;
+  total: number;
+  type: 'item' | 'patch';
+}
+
 export interface AgentsMessageRenderMeta {
   emailPreview?: string;
   emailSubject?: string;
@@ -11,6 +37,8 @@ export interface AgentsMessageRenderMeta {
   svgFileName?: string;
   svgSummary?: string;
   svgText?: string;
+  templateDataItems?: TemplateDataItem[];
+  templateDataPatches?: TemplateDataPatch[];
 }
 
 export interface AgentsChatMessage {
@@ -53,7 +81,7 @@ export interface AgentsStreamRequest {
 }
 
 export interface AgentsStreamOptions extends AgentsStreamRequest {
-  onChunk?: (chunk: string) => void;
+  onChunk?: (chunk: string | TemplateDataStreamChunk) => void;
   onDone?: (result: AgentsStreamResult) => void;
   onMeta?: (meta: AgentsStreamMeta) => void;
   signal?: AbortSignal;

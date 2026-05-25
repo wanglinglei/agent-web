@@ -71,4 +71,24 @@ export const HOME_PAGE_CARD_LIST: HomePageCardConfig[] = [
       surface: '#ffffff',
     },
   },
+  {
+    badge: 'Template Data Agent',
+    title: '模板扩展助手',
+    description:
+      '适合“示例文档 + 人名 + JSON 模板”的批量生产场景，支持首轮生成与二次 patch 修改。',
+    highlights: ['批量生成', '文件上传', 'Patch 修改'],
+    navLabel: '打开模板扩展工作台',
+    route: '/template-data',
+    theme: {
+      accent: '#7c3aed',
+      accentSoft: '#ede9fe',
+      accentStrong: '#5b21b6',
+      heroBackground:
+        'linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(196, 181, 253, 0.18))',
+      pageBackground: 'linear-gradient(180deg, #f5f3ff 0%, #f8fafc 100%)',
+      panelBackground:
+        'linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(237, 233, 254, 0.95))',
+      surface: '#ffffff',
+    },
+  },
 ];
